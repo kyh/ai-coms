@@ -181,7 +181,12 @@ export function MessageList({
                     key={message.id}
                     className="group/message relative -mx-2 rounded-md px-2 hover:bg-muted/40"
                   >
-                    <div className="absolute -top-3 right-2 hidden group-hover/message:block">
+                    {/*
+                     * Hover reveals the picker on fine pointers; touch devices
+                     * have no hover, so it stays visible there (and on keyboard
+                     * focus) — otherwise reactions are unreachable on mobile.
+                     */}
+                    <div className="absolute -top-3 right-2 hidden group-hover/message:block group-focus-within/message:block pointer-coarse:block">
                       <ReactionPicker messageId={message.id} />
                     </div>
                     <p className="text-sm leading-6 whitespace-pre-wrap">{message.body}</p>

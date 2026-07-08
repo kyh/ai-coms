@@ -62,6 +62,8 @@ export function ConversationView({ onAskAssistant }: ConversationViewProps) {
   const partner =
     conversation.kind === "dm" ? users.find((user) => user.id === conversation.userId) : undefined;
   const title = conversation.kind === "channel" ? conversation.name : (partner?.name ?? "Unknown");
+  /** Label tracks the prompt: a channel gets caught up on, a DM gets summarized. */
+  const summarizeLabel = conversation.kind === "channel" ? "Catch me up" : "Summarize";
   const summarizePrompt =
     conversation.kind === "channel"
       ? `Catch me up on #${conversation.name}`
@@ -93,7 +95,7 @@ export function ConversationView({ onAskAssistant }: ConversationViewProps) {
           )}
           <Button variant="outline" size="sm" onClick={() => onAskAssistant(summarizePrompt)}>
             <SparklesIcon />
-            Summarize
+            {summarizeLabel}
           </Button>
         </div>
       </header>
