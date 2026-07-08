@@ -2,8 +2,7 @@ import { ME, type Thread } from "./thread";
 
 /**
  * Hand-authored seed mailbox. Dates are computed relative to first load so the
- * inbox always looks fresh; ids are stable so the demo transport can reference
- * specific threads.
+ * inbox always looks fresh.
  */
 
 const HOUR = 60 * 60 * 1000;
