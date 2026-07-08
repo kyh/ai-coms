@@ -4,7 +4,7 @@ import { ArchiveIcon, InboxIcon, RotateCcwIcon, StarIcon } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { allLabels, threadsForFolder, useComsStore, type Folder } from "@/lib/thread-store";
+import { allLabels, threadsForFolder, useThreadStore, type Folder } from "@/lib/thread-store";
 import { cn } from "@/lib/utils";
 import { labelColor } from "./label-badge";
 
@@ -16,12 +16,12 @@ const FOLDERS: { id: Folder; label: string; icon: React.ComponentType<{ classNam
   ];
 
 export function MailSidebar() {
-  const threads = useComsStore((state) => state.threads);
-  const folder = useComsStore((state) => state.folder);
-  const activeLabel = useComsStore((state) => state.activeLabel);
-  const setFolder = useComsStore((state) => state.setFolder);
-  const setActiveLabel = useComsStore((state) => state.setActiveLabel);
-  const resetMailbox = useComsStore((state) => state.resetMailbox);
+  const threads = useThreadStore((state) => state.threads);
+  const folder = useThreadStore((state) => state.folder);
+  const activeLabel = useThreadStore((state) => state.activeLabel);
+  const setFolder = useThreadStore((state) => state.setFolder);
+  const setActiveLabel = useThreadStore((state) => state.setActiveLabel);
+  const resetMailbox = useThreadStore((state) => state.resetMailbox);
 
   const unreadCount = threads.filter((thread) => !thread.archived && thread.unread).length;
   const labels = allLabels(threads);

@@ -36,7 +36,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ME, prioritySchema, type Thread } from "@/lib/thread";
-import { allLabels, useComsStore } from "@/lib/thread-store";
+import { allLabels, useThreadStore } from "@/lib/thread-store";
 import { cn } from "@/lib/utils";
 import { LabelBadge, PriorityBadge } from "./label-badge";
 
@@ -48,14 +48,14 @@ const PRIORITY_OPTIONS = [
 ];
 
 function ThreadActions({ thread }: { thread: Thread }) {
-  const threads = useComsStore((state) => state.threads);
-  const setStarred = useComsStore((state) => state.setStarred);
-  const setArchived = useComsStore((state) => state.setArchived);
-  const setUnread = useComsStore((state) => state.setUnread);
-  const setPriority = useComsStore((state) => state.setPriority);
-  const addLabel = useComsStore((state) => state.addLabel);
-  const removeLabel = useComsStore((state) => state.removeLabel);
-  const selectThread = useComsStore((state) => state.selectThread);
+  const threads = useThreadStore((state) => state.threads);
+  const setStarred = useThreadStore((state) => state.setStarred);
+  const setArchived = useThreadStore((state) => state.setArchived);
+  const setUnread = useThreadStore((state) => state.setUnread);
+  const setPriority = useThreadStore((state) => state.setPriority);
+  const addLabel = useThreadStore((state) => state.addLabel);
+  const removeLabel = useThreadStore((state) => state.removeLabel);
+  const selectThread = useThreadStore((state) => state.selectThread);
 
   const [newLabel, setNewLabel] = React.useState("");
   const labels = allLabels(threads);
@@ -187,11 +187,11 @@ function ThreadActions({ thread }: { thread: Thread }) {
 }
 
 export function ThreadView() {
-  const threads = useComsStore((state) => state.threads);
-  const selectedThreadId = useComsStore((state) => state.selectedThreadId);
-  const drafts = useComsStore((state) => state.drafts);
-  const setDraft = useComsStore((state) => state.setDraft);
-  const sendReply = useComsStore((state) => state.sendReply);
+  const threads = useThreadStore((state) => state.threads);
+  const selectedThreadId = useThreadStore((state) => state.selectedThreadId);
+  const drafts = useThreadStore((state) => state.drafts);
+  const setDraft = useThreadStore((state) => state.setDraft);
+  const sendReply = useThreadStore((state) => state.sendReply);
 
   const thread = threads.find((candidate) => candidate.id === selectedThreadId);
 

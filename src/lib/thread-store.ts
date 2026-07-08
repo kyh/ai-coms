@@ -1,27 +1,26 @@
 "use client";
 
-import { create } from "zustand";
-import { persist, type PersistStorage } from "zustand/middleware";
 import { z } from "zod";
+import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 
-import { seedThreads } from "./seed-threads";
-import { ME, threadLastActivity, threadSchema, type Priority, type Thread } from "./thread";
+import { seedThreads } from "@/lib/seed-threads";
+import { ME, threadLastActivity, threadSchema, type Priority, type Thread } from "@/lib/thread";
 
 export type Folder = "inbox" | "starred" | "archived";
 
-export type TriageUpdate = {
+type TriageUpdate = {
   threadId: string;
   priority: Priority;
   labels: string[];
 };
 
-type PersistedState = {
+type ThreadStore = {
   threads: Thread[];
   drafts: Record<string, string>;
-};
-
-type ComsStore = PersistedState & {
   hydrated: boolean;
+  /** Whether the one-time seed has run — prevents seeds resurrecting after a full clear. */
+  seeded: boolean;
   selectedThreadId: string | null;
   folder: Folder;
   activeLabel: string | null;
@@ -42,41 +41,25 @@ type ComsStore = PersistedState & {
   applyTriage: (updates: TriageUpdate[]) => void;
   setDraft: (threadId: string, draft: string) => void;
   sendReply: (threadId: string) => void;
+  seed: () => void;
   resetMailbox: () => void;
 };
 
 /**
- * localStorage boundary: everything read back is zod-parsed; anything
- * malformed is discarded and the seed mailbox is used instead.
+ * localStorage boundary: every persisted thread is zod-parsed on read and any
+ * malformed entry is dropped, so corrupt/tampered storage can't crash
+ * downstream consumers.
  */
 const persistedStateSchema = z.object({
-  state: z.object({
-    threads: z.array(threadSchema),
-    drafts: z.record(z.string(), z.string()),
-  }),
-  version: z.number().optional(),
+  threads: z.array(z.unknown()).transform((threads) =>
+    threads.flatMap((thread) => {
+      const parsed = threadSchema.safeParse(thread);
+      return parsed.success ? [parsed.data] : [];
+    }),
+  ),
+  drafts: z.record(z.string(), z.string()).optional(),
+  seeded: z.boolean().optional(),
 });
-
-const storage: PersistStorage<PersistedState> = {
-  getItem: (name) => {
-    if (typeof window === "undefined") return null;
-    const raw = window.localStorage.getItem(name);
-    if (!raw) return null;
-    try {
-      return persistedStateSchema.parse(JSON.parse(raw));
-    } catch {
-      return null;
-    }
-  },
-  setItem: (name, value) => {
-    if (typeof window === "undefined") return;
-    window.localStorage.setItem(name, JSON.stringify(value));
-  },
-  removeItem: (name) => {
-    if (typeof window === "undefined") return;
-    window.localStorage.removeItem(name);
-  },
-};
 
 const updateThreads = (
   threads: Thread[],
@@ -87,12 +70,13 @@ const updateThreads = (
   return threads.map((thread) => (ids.has(thread.id) ? update(thread) : thread));
 };
 
-export const useComsStore = create<ComsStore>()(
+export const useThreadStore = create<ThreadStore>()(
   persist(
     (set, get) => ({
-      threads: seedThreads,
+      threads: [],
       drafts: {},
       hydrated: false,
+      seeded: false,
       selectedThreadId: null,
       folder: "inbox",
       activeLabel: null,
@@ -213,10 +197,20 @@ export const useComsStore = create<ComsStore>()(
         });
       },
 
+      seed: () =>
+        set((state) => ({
+          threads: [
+            ...state.threads,
+            ...seedThreads.filter((seed) => !state.threads.some((t) => t.id === seed.id)),
+          ],
+          seeded: true,
+        })),
+
       resetMailbox: () =>
         set({
           threads: seedThreads,
           drafts: {},
+          seeded: true,
           selectedThreadId: null,
           folder: "inbox",
           activeLabel: null,
@@ -226,11 +220,27 @@ export const useComsStore = create<ComsStore>()(
     {
       name: "ai-coms-mailbox",
       version: 1,
-      storage,
+      storage: createJSONStorage(() => localStorage),
       skipHydration: true,
-      partialize: (state) => ({ threads: state.threads, drafts: state.drafts }),
-      onRehydrateStorage: () => (state) => {
-        state?.setHydrated();
+      partialize: (state) => ({
+        threads: state.threads,
+        drafts: state.drafts,
+        seeded: state.seeded,
+      }),
+      merge: (persisted, current) => {
+        const parsed = persistedStateSchema.safeParse(persisted);
+        if (!parsed.success) return current;
+        return {
+          ...current,
+          threads: parsed.data.threads,
+          drafts: parsed.data.drafts ?? {},
+          seeded: parsed.data.seeded ?? false,
+        };
+      },
+      onRehydrateStorage: () => (state, error) => {
+        if (error || !state) return;
+        if (!state.seeded) state.seed();
+        state.setHydrated();
       },
     },
   ),

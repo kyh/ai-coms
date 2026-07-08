@@ -1,16 +1,16 @@
 import { stepCountIs, tool, ToolLoopAgent } from "ai";
 import { z } from "zod";
 
-import { createModel } from "../gateway";
+import { createModel } from "@/ai/gateway";
 import {
   archiveThreadsDataSchema,
   draftReplyDataSchema,
   markThreadsDataSchema,
   starThreadsDataSchema,
   triageUpdateSchema,
-} from "../messages/data-parts";
-import type { ComsStreamWriter } from "../messages/types";
-import { formatMailboxContext, type MailboxContext } from "@/lib/mailbox-context";
+} from "@/ai/messages/data-parts";
+import type { ChatStreamWriter } from "@/ai/messages/types";
+import type { MailboxContext } from "@/lib/mailbox-context";
 import comsPrompt from "./coms-agent-prompt";
 
 /**
@@ -20,7 +20,7 @@ import comsPrompt from "./coms-agent-prompt";
  */
 
 type WriterParams = {
-  writer: ComsStreamWriter;
+  writer: ChatStreamWriter;
 };
 
 const count = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
@@ -102,9 +102,43 @@ function createMarkThreadsTool({ writer }: WriterParams) {
   });
 }
 
+/** Renders the per-turn mailbox digest into instruction text for the agent. */
+const formatMailboxContext = (context: MailboxContext): string => {
+  const lines = context.threads.map((thread) => {
+    const flags = [
+      thread.unread ? "unread" : "read",
+      thread.starred ? "starred" : null,
+      thread.archived ? "archived" : null,
+    ].filter((flag): flag is string => flag !== null);
+    const labels = thread.labels.length > 0 ? thread.labels.join(", ") : "none";
+    return [
+      `- id: ${thread.id}`,
+      `  subject: ${thread.subject}`,
+      `  from: ${thread.from} | last activity: ${thread.lastActivity}`,
+      `  priority: ${thread.priority} | labels: ${labels} | ${flags.join(", ")}`,
+      `  snippet: ${thread.snippet}`,
+    ].join("\n");
+  });
+
+  const sections = [
+    `## Current mailbox\n\nCurrent datetime: ${context.now} (timezone: ${context.timeZone})\n\nThreads (${context.threads.length}):\n${lines.join("\n")}`,
+  ];
+
+  if (context.openThread) {
+    const messages = context.openThread.messages
+      .map((message) => `From: ${message.from}\nAt: ${message.at}\n${message.body}`)
+      .join("\n\n---\n\n");
+    sections.push(
+      `## Currently open thread\n\nThe user is looking at thread "${context.openThread.id}" (${context.openThread.subject}) with participants: ${context.openThread.participants.join(", ")}.\n\nFull messages:\n\n${messages}`,
+    );
+  }
+
+  return sections.join("\n\n");
+};
+
 type CreateComsAgentParams = {
   apiKey: string;
-  writer: ComsStreamWriter;
+  writer: ChatStreamWriter;
   mailboxContext: MailboxContext;
 };
 

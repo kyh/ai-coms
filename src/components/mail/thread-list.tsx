@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/empty";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { threadLastActivity, threadSender, threadSnippet, type Thread } from "@/lib/thread";
-import { sortByActivity, threadsForFolder, useComsStore } from "@/lib/thread-store";
+import { sortByActivity, threadsForFolder, useThreadStore } from "@/lib/thread-store";
 import { cn } from "@/lib/utils";
 import { LabelBadge, PriorityBadge } from "./label-badge";
 
@@ -37,12 +37,12 @@ const matchesSearch = (thread: Thread, query: string): boolean => {
 };
 
 export function ThreadList() {
-  const threads = useComsStore((state) => state.threads);
-  const folder = useComsStore((state) => state.folder);
-  const activeLabel = useComsStore((state) => state.activeLabel);
-  const search = useComsStore((state) => state.search);
-  const selectedThreadId = useComsStore((state) => state.selectedThreadId);
-  const selectThread = useComsStore((state) => state.selectThread);
+  const threads = useThreadStore((state) => state.threads);
+  const folder = useThreadStore((state) => state.folder);
+  const activeLabel = useThreadStore((state) => state.activeLabel);
+  const search = useThreadStore((state) => state.search);
+  const selectedThreadId = useThreadStore((state) => state.selectedThreadId);
+  const selectThread = useThreadStore((state) => state.selectThread);
 
   const visible = sortByActivity(
     threadsForFolder(threads, folder).filter(

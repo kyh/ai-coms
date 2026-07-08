@@ -3,11 +3,11 @@ import { z } from "zod";
 import {
   messageSchema,
   prioritySchema,
+  threadLastActivity,
   threadSender,
   threadSnippet,
-  threadLastActivity,
   type Thread,
-} from "./thread";
+} from "@/lib/thread";
 
 /**
  * The dynamic state the client ships with every chat request. The server is
@@ -15,7 +15,7 @@ import {
  * the agent's instructions so it can reason about the actual mailbox.
  */
 
-export const threadDigestSchema = z.object({
+const threadDigestSchema = z.object({
   id: z.string(),
   subject: z.string(),
   from: z.string(),
@@ -28,7 +28,7 @@ export const threadDigestSchema = z.object({
   snippet: z.string(),
 });
 
-export const openThreadContextSchema = z.object({
+const openThreadContextSchema = z.object({
   id: z.string(),
   subject: z.string(),
   participants: z.array(z.string()),
@@ -36,8 +36,10 @@ export const openThreadContextSchema = z.object({
 });
 
 export const mailboxContextSchema = z.object({
+  /** Current datetime, ISO 8601 with UTC instant. */
   now: z.string(),
-  timezone: z.string(),
+  /** IANA timezone, e.g. "America/Los_Angeles". */
+  timeZone: z.string(),
   threads: z.array(threadDigestSchema),
   openThread: openThreadContextSchema.optional(),
 });
@@ -51,8 +53,8 @@ export const buildMailboxContext = (
 ): MailboxContext => {
   const openThread = threads.find((thread) => thread.id === openThreadId);
   return {
-    now: new Date().toString(),
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    now: new Date().toISOString(),
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     threads: threads.map((thread) => ({
       id: thread.id,
       subject: thread.subject,
@@ -76,38 +78,4 @@ export const buildMailboxContext = (
         }
       : {}),
   };
-};
-
-/** Server side: render the digest into instruction text for the agent. */
-export const formatMailboxContext = (context: MailboxContext): string => {
-  const lines = context.threads.map((thread) => {
-    const flags = [
-      thread.unread ? "unread" : "read",
-      thread.starred ? "starred" : null,
-      thread.archived ? "archived" : null,
-    ].filter((flag): flag is string => flag !== null);
-    const labels = thread.labels.length > 0 ? thread.labels.join(", ") : "none";
-    return [
-      `- id: ${thread.id}`,
-      `  subject: ${thread.subject}`,
-      `  from: ${thread.from} | last activity: ${thread.lastActivity}`,
-      `  priority: ${thread.priority} | labels: ${labels} | ${flags.join(", ")}`,
-      `  snippet: ${thread.snippet}`,
-    ].join("\n");
-  });
-
-  const sections = [
-    `## Current mailbox\n\nCurrent datetime: ${context.now} (timezone: ${context.timezone})\n\nThreads (${context.threads.length}):\n${lines.join("\n")}`,
-  ];
-
-  if (context.openThread) {
-    const messages = context.openThread.messages
-      .map((message) => `From: ${message.from}\nAt: ${message.at}\n${message.body}`)
-      .join("\n\n---\n\n");
-    sections.push(
-      `## Currently open thread\n\nThe user is looking at thread "${context.openThread.id}" (${context.openThread.subject}) with participants: ${context.openThread.participants.join(", ")}.\n\nFull messages:\n\n${messages}`,
-    );
-  }
-
-  return sections.join("\n\n");
 };

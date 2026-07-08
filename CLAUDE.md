@@ -15,11 +15,11 @@ AI-native communications app: a unified inbox you manage by talking to it. Forka
 ```
 src/
 ├── ai/
-│   ├── gateway.ts               # MODEL_ID + createModel(apiKey) — single model wiring point
+│   ├── gateway.ts               # createModel(apiKey) — single model wiring point
 │   ├── agents/coms-agent.ts     # ToolLoopAgent factory; tools write data parts
 │   ├── agents/coms-agent-prompt.ts
 │   ├── messages/data-parts.ts   # zod schemas + DataPart map — client<->server contract
-│   ├── messages/{metadata,types}.ts
+│   ├── messages/types.ts
 │   └── response/stream-chat-response.ts
 ├── app/
 │   ├── api/chat/route.ts        # zod-parsed body, key resolution, delegates to streamChatResponse

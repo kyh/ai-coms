@@ -3,6 +3,7 @@
 import * as React from "react";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
@@ -12,7 +13,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 
 export const GATEWAY_API_KEY_STORAGE_KEY = "gateway-api-key";
@@ -51,17 +51,17 @@ export function ApiKeyDialog({ open, onOpenChange }: ApiKeyDialogProps) {
           <DialogDescription>
             Enter your{" "}
             <a
-              className="underline"
               href="https://vercel.com/d?to=%2F%5Bteam%5D%2F%7E%2Fai%2Fapi-keys%3Futm_source%3Dai-coms.kyh.io&title=Get+an+API+Key"
               target="_blank"
               rel="noopener noreferrer"
+              className="underline"
             >
               Vercel Gateway API key
             </a>{" "}
             to use AI features. Your key will be stored locally in your browser.
           </DialogDescription>
         </DialogHeader>
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2 py-4">
           <Input
             type="password"
             placeholder="vck_..."
@@ -78,7 +78,7 @@ export function ApiKeyDialog({ open, onOpenChange }: ApiKeyDialogProps) {
             <button type="button" className="underline" onClick={() => setApiKeyInput("demo")}>
               Use a demo key
             </button>
-            &nbsp;(responses are scripted)
+            &nbsp;(Uses a scripted client-side reply — no API key or network needed.)
           </div>
         </div>
         <DialogFooter>

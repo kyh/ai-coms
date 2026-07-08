@@ -1,6 +1,6 @@
 import { StaticChatTransport } from "@loremllm/transport";
 
-import type { ComsChatUIMessage } from "@/ai/messages/types";
+import type { ChatUIMessage } from "@/ai/messages/types";
 import type { DataPart } from "@/ai/messages/data-parts";
 
 /**
@@ -40,7 +40,7 @@ const triageInput: DataPart["triage-threads"] = {
 
 const triageOutput = "Successfully triaged 5 threads.";
 
-export const demoTransport = new StaticChatTransport<ComsChatUIMessage>({
+export const demoTransport = new StaticChatTransport<ChatUIMessage>({
   chunkDelayMs: [40, 160],
   async *mockResponse() {
     yield { type: "step-start" };

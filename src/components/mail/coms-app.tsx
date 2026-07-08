@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useComsStore } from "@/lib/thread-store";
+import { useThreadStore } from "@/lib/thread-store";
 import { MailSidebar } from "./mail-sidebar";
 import { ThreadList } from "./thread-list";
 import { ThreadView } from "./thread-view";
@@ -37,14 +37,14 @@ function AppSkeleton() {
 }
 
 export function ComsApp() {
-  const hydrated = useComsStore((state) => state.hydrated);
-  const search = useComsStore((state) => state.search);
-  const setSearch = useComsStore((state) => state.setSearch);
+  const hydrated = useThreadStore((state) => state.hydrated);
+  const search = useThreadStore((state) => state.search);
+  const setSearch = useThreadStore((state) => state.setSearch);
 
   const [chatOpen, setChatOpen] = React.useState(true);
 
   React.useEffect(() => {
-    void useComsStore.persist.rehydrate();
+    void useThreadStore.persist.rehydrate();
   }, []);
 
   React.useEffect(() => {

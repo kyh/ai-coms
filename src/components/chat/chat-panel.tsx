@@ -23,7 +23,7 @@ import {
   starThreadsDataSchema,
   triageThreadsDataSchema,
 } from "@/ai/messages/data-parts";
-import type { ComsChatUIMessage } from "@/ai/messages/types";
+import type { ChatUIMessage } from "@/ai/messages/types";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Spinner } from "@/components/ui/spinner";
@@ -31,7 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import { buildMailboxContext } from "@/lib/mailbox-context";
-import { useComsStore } from "@/lib/thread-store";
+import { useThreadStore } from "@/lib/thread-store";
 import { cn } from "@/lib/utils";
 import { ApiKeyDialog, GATEWAY_API_KEY_STORAGE_KEY } from "./api-key-dialog";
 import { demoTransport } from "./demo-transport";
@@ -50,7 +50,7 @@ type ToolPartDisplay = {
   label: string;
 };
 
-const describeToolPart = (part: ComsChatUIMessage["parts"][number]): ToolPartDisplay | null => {
+const describeToolPart = (part: ChatUIMessage["parts"][number]): ToolPartDisplay | null => {
   switch (part.type) {
     case "tool-triageThreads": {
       const n = part.input?.updates?.length;
@@ -107,28 +107,29 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({ onClose }: ChatPanelProps) {
-  const threads = useComsStore((state) => state.threads);
-  const selectedThreadId = useComsStore((state) => state.selectedThreadId);
-  const applyTriage = useComsStore((state) => state.applyTriage);
-  const setDraft = useComsStore((state) => state.setDraft);
-  const selectThread = useComsStore((state) => state.selectThread);
-  const setArchived = useComsStore((state) => state.setArchived);
-  const setStarred = useComsStore((state) => state.setStarred);
-  const setUnread = useComsStore((state) => state.setUnread);
+  const threads = useThreadStore((state) => state.threads);
+  const selectedThreadId = useThreadStore((state) => state.selectedThreadId);
+  const applyTriage = useThreadStore((state) => state.applyTriage);
+  const setDraft = useThreadStore((state) => state.setDraft);
+  const selectThread = useThreadStore((state) => state.selectThread);
+  const setArchived = useThreadStore((state) => state.setArchived);
+  const setStarred = useThreadStore((state) => state.setStarred);
+  const setUnread = useThreadStore((state) => state.setUnread);
 
   const [input, setInput] = React.useState("");
   const [showApiKeyDialog, setShowApiKeyDialog] = React.useState(false);
   const [apiKey, , removeApiKey] = useLocalStorage(GATEWAY_API_KEY_STORAGE_KEY, "");
 
-  const { messages, sendMessage, setMessages, status } = useChat<ComsChatUIMessage>({
-    id: apiKey,
+  const { messages, sendMessage, setMessages, status } = useChat<ChatUIMessage>({
+    id: apiKey === "" ? "keyless" : apiKey,
     transport: apiKey === "demo" ? demoTransport : undefined,
     onError: (error) => {
-      const message = error.message?.toLowerCase() ?? "";
+      const message = error.message.toLowerCase();
       const isAuthError =
         message.includes("unauthorized") ||
         message.includes("authentication") ||
         message.includes("invalid api key") ||
+        message.includes("gateway api key is required") ||
         message.includes("401") ||
         message.includes("403");
       if (isAuthError) {

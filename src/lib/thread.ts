@@ -16,7 +16,7 @@ export const messageSchema = z.object({
   body: z.string(),
 });
 
-export type Message = z.infer<typeof messageSchema>;
+type Message = z.infer<typeof messageSchema>;
 
 export const threadSchema = z.object({
   id: z.string(),
@@ -35,7 +35,7 @@ export type Thread = z.infer<typeof threadSchema>;
 /** Display name used for messages authored in the reply composer. */
 export const ME = "You";
 
-export const lastMessage = (thread: Thread): Message | undefined => thread.messages.at(-1);
+const lastMessage = (thread: Thread): Message | undefined => thread.messages.at(-1);
 
 export const threadSnippet = (thread: Thread, maxLength = 120): string => {
   const body = lastMessage(thread)?.body ?? "";
