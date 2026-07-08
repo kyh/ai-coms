@@ -1,6 +1,6 @@
 # Agent Instructions
 
-AI-native communications app: a unified inbox you manage by talking to it. Next.js 16 (App Router, Turbopack), React 19, TypeScript, Tailwind CSS v4, eve (Vercel's agent framework) + `ai@7`.
+AI-native team-chat app: a Slack-style workspace you keep up with by talking to it. Next.js 16 (App Router, Turbopack), React 19, TypeScript, Tailwind CSS v4, eve (Vercel's agent framework) + `ai@7`.
 
 ## Tech Stack
 
@@ -14,20 +14,32 @@ AI-native communications app: a unified inbox you manage by talking to it. Next.
 
 ```
 agent/agent.ts                  # defineAgent: model + step.started BYO-key resolver + limits
-agent/instructions.md           # system prompt (triage rubric, drafting style, per-turn context contract)
-agent/channels/eve.ts           # auth walk: gatewayKeyBearer → vercelOidc → localDev
-agent/tools/triage_threads.ts   # defineTool; snake_case filename = tool name
-agent/tools/{draft_reply,archive_threads,star_threads,mark_threads}.ts
+agent/instructions.md           # system prompt (persona, per-turn context contract, etiquette)
+agent/channels/eve.ts           # eve's TRANSPORT channel — auth walk: gatewayKeyBearer → vercelOidc → localDev
+                                #   NOT a chat channel. Domain channels live in src/lib/workspace.ts.
+agent/tools/draft_message.ts    # defineTool; snake_case filename = tool name
+agent/tools/{create_channel,add_reaction,mark_read,set_status}.ts
 agent/tools/<builtin>.ts        # disableTool() sentinels (bash, web_fetch, …)
+src/lib/workspace.ts            # zod domain: users, messages, conversation = channel | dm (discriminated union)
+                                #   + pure helpers: unreadCount, rootMessages, threadReplies, messageGroups
+src/lib/workspace-store.ts      # zustand store, seeds from src/lib/seed-workspace.ts
+src/lib/workspace-context.ts    # per-turn app state (conversation digest + active conversation + open thread)
 src/lib/assistant-schemas.ts    # zod contract: tool input + payload schemas (shared both sides)
-src/lib/mailbox-context.ts      # per-turn app state shape (thread digest + open thread)
 src/components/chat/chat-panel.tsx  # useEveAgent bridge: clientContext out, action.result in
 src/components/chat/api-key-dialog.tsx
-src/components/mail/            # coms-app shell, mail-sidebar, thread-list, thread-view
-src/lib/thread-store.ts         # zustand store, seeds from src/lib/seed-threads.ts
+src/components/workspace/       # coms-app shell, workspace-sidebar, conversation-view,
+                                #   message-list (grouping + reactions), message-composer,
+                                #   thread-pane, create-channel-dialog, presence-dot, user-avatar
 ```
 
-Flow: chat panel `send({ message, clientContext: mailboxDigest })` → eve channel authenticates (user bearer key / OIDC / localhost) → dynamic model resolver picks the user's gateway key from session auth (fallback: server `AI_GATEWAY_API_KEY`) → tools return structured payloads → client `onEvent` zod-parses `action.result` events → store mutation + sonner toast. `draft_reply` lands in the open thread's composer for review — nothing is ever sent automatically.
+Flow: chat panel `send({ message, clientContext: workspaceDigest })` → eve channel authenticates (user bearer key / OIDC / localhost) → dynamic model resolver picks the user's gateway key from session auth (fallback: server `AI_GATEWAY_API_KEY`) → tools return structured payloads → client `onEvent` zod-parses `action.result` events → store mutation + sonner toast. `draft_message` lands in the conversation's composer for review — nothing is ever sent automatically. Summaries and "catch me up" are answered as prose from the per-turn context; no tool is involved.
+
+## Domain notes
+
+- A `Conversation` is a discriminated union on `kind`: `channel` (name, purpose, memberIds, muted) or `dm` (userId). There is no optional-field soup — never widen it.
+- Thread replies are ordinary messages with a `parentId`; they live in the same flat `messages` array as their parent.
+- Unread = messages after a conversation's `lastReadAt` not authored by `ME`. Opening a conversation marks it read.
+- The thread pane overlays the assistant panel so the assistant stays mounted and keeps its transcript.
 
 ## Commands
 

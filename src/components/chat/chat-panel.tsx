@@ -4,16 +4,16 @@ import * as React from "react";
 import type { EveMessage, EveMessagePart } from "eve/react";
 import { useEveAgent } from "eve/react";
 import {
-  ArchiveIcon,
+  CheckCheckIcon,
   CheckIcon,
-  InboxIcon,
+  HashIcon,
   KeyIcon,
-  MailCheckIcon,
   PenLineIcon,
   RotateCcwIcon,
   SendIcon,
+  SmilePlusIcon,
   SparklesIcon,
-  StarIcon,
+  UserRoundIcon,
   XIcon,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -26,29 +26,37 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useLocalStorage } from "@/hooks/use-local-storage";
 import {
-  archiveThreadsPayloadSchema,
-  draftReplyPayloadSchema,
-  markThreadsPayloadSchema,
-  starThreadsPayloadSchema,
-  triageThreadsPayloadSchema,
+  addReactionPayloadSchema,
+  createChannelPayloadSchema,
+  draftMessagePayloadSchema,
+  markReadPayloadSchema,
+  setStatusPayloadSchema,
 } from "@/lib/assistant-schemas";
-import { buildMailboxContext, type MailboxContext } from "@/lib/mailbox-context";
-import { useThreadStore } from "@/lib/thread-store";
 import { cn } from "@/lib/utils";
+import { buildWorkspaceContext, type WorkspaceContext } from "@/lib/workspace-context";
+import { useWorkspaceStore } from "@/lib/workspace-store";
 import { ApiKeyDialog, GATEWAY_API_KEY_STORAGE_KEY } from "./api-key-dialog";
 
 const EXAMPLE_PROMPTS = [
-  "Triage my inbox",
-  "Summarize the thread with Acme",
-  "Draft a polite decline to the recruiter",
-  "What needs my attention today?",
+  "Catch me up on #engineering",
+  "Summarize this thread",
+  "Draft a reply to Priya",
+  "What did I miss while away?",
 ];
 
 const pluralize = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`;
 
-const buildContext = (): MailboxContext => {
-  const { threads, selectedThreadId } = useThreadStore.getState();
-  return buildMailboxContext(threads, selectedThreadId);
+const buildContext = (): WorkspaceContext => {
+  const { users, conversations, messages, status, selectedConversationId, openThreadId } =
+    useWorkspaceStore.getState();
+  return buildWorkspaceContext({
+    users,
+    conversations,
+    messages,
+    status,
+    selectedConversationId,
+    openThreadId,
+  });
 };
 
 /**
@@ -104,54 +112,66 @@ const applyToolResult = (event: unknown): void => {
   const { status, result } = parsed.data.data;
   if (status !== "completed" || result.isError === true) return;
 
-  const store = useThreadStore.getState();
+  const store = useWorkspaceStore.getState();
   switch (result.toolName) {
-    case "triage_threads": {
-      const payload = triageThreadsPayloadSchema.safeParse(result.output);
+    case "draft_message": {
+      const payload = draftMessagePayloadSchema.safeParse(result.output);
       if (!payload.success) return;
-      store.applyTriage(payload.data.updates);
-      toast.success(`Triaged ${pluralize(payload.data.updates.length, "thread")}`);
-      break;
-    }
-    case "draft_reply": {
-      const payload = draftReplyPayloadSchema.safeParse(result.output);
-      if (!payload.success) return;
-      const { threadId, draft } = payload.data;
-      if (!store.threads.some((thread) => thread.id === threadId)) {
-        toast.error("The assistant tried to draft a reply in a thread that no longer exists");
+      const { conversationId, body } = payload.data;
+      if (!store.conversations.some((conversation) => conversation.id === conversationId)) {
+        toast.error("The assistant tried to draft into a conversation that no longer exists");
         return;
       }
-      store.setDraft(threadId, draft);
-      store.selectThread(threadId);
+      store.setDraft(conversationId, body);
+      store.selectConversation(conversationId);
       toast.success("Draft ready in the composer");
       break;
     }
-    case "archive_threads": {
-      const payload = archiveThreadsPayloadSchema.safeParse(result.output);
+    case "create_channel": {
+      const payload = createChannelPayloadSchema.safeParse(result.output);
       if (!payload.success) return;
-      const { threadIds, value } = payload.data;
-      store.setArchived(threadIds, value);
-      toast.success(
-        `${value ? "Archived" : "Unarchived"} ${pluralize(threadIds.length, "thread")}`,
-      );
+      // The tool is stateless, so collision and slug validation live here.
+      const { name, purpose } = payload.data;
+      const created = store.createChannel(name, purpose);
+      if (!created.ok) {
+        toast.error(
+          created.reason === "duplicate"
+            ? `#${name} already exists`
+            : `"${name}" is not a usable channel name`,
+        );
+        return;
+      }
+      toast.success(`Created #${name}`);
       break;
     }
-    case "star_threads": {
-      const payload = starThreadsPayloadSchema.safeParse(result.output);
+    case "add_reaction": {
+      const payload = addReactionPayloadSchema.safeParse(result.output);
       if (!payload.success) return;
-      const { threadIds, value } = payload.data;
-      store.setStarred(threadIds, value);
-      toast.success(`${value ? "Starred" : "Unstarred"} ${pluralize(threadIds.length, "thread")}`);
+      const { messageId, emoji } = payload.data;
+      if (!store.messages.some((message) => message.id === messageId)) {
+        toast.error("The assistant tried to react to a message that no longer exists");
+        return;
+      }
+      store.toggleReaction(messageId, emoji);
+      toast.success(`Reacted with ${emoji}`);
       break;
     }
-    case "mark_threads": {
-      const payload = markThreadsPayloadSchema.safeParse(result.output);
+    case "mark_read": {
+      const payload = markReadPayloadSchema.safeParse(result.output);
       if (!payload.success) return;
-      const { threadIds, unread } = payload.data;
-      store.setUnread(threadIds, unread);
-      toast.success(
-        `Marked ${pluralize(threadIds.length, "thread")} as ${unread ? "unread" : "read"}`,
+      const known = payload.data.conversationIds.filter((id) =>
+        store.conversations.some((conversation) => conversation.id === id),
       );
+      if (known.length === 0) return;
+      store.markRead(known);
+      toast.success(`Marked ${pluralize(known.length, "conversation")} as read`);
+      break;
+    }
+    case "set_status": {
+      const payload = setStatusPayloadSchema.safeParse(result.output);
+      if (!payload.success) return;
+      store.setStatus(payload.data);
+      toast.success(`Status set to ${payload.data.emoji} ${payload.data.text}`);
       break;
     }
   }
@@ -167,9 +187,12 @@ const isAuthError = (error: Error): boolean =>
 
 interface ChatPanelProps {
   onClose: () => void;
+  /** One-shot canned prompt from the shell (the conversation "Summarize" button). */
+  pendingPrompt: string | null;
+  onPromptSent: () => void;
 }
 
-export function ChatPanel({ onClose }: ChatPanelProps) {
+export function ChatPanel({ onClose, pendingPrompt, onPromptSent }: ChatPanelProps) {
   const [input, setInput] = React.useState("");
   const [showApiKeyDialog, setShowApiKeyDialog] = React.useState(false);
   const [apiKey, , removeApiKey] = useLocalStorage(GATEWAY_API_KEY_STORAGE_KEY, "");
@@ -209,6 +232,17 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
     agent.send({ message: trimmed, clientContext: buildContext() }).catch(() => undefined); // failures surface via status/error/onError
     setInput("");
   };
+
+  // Canned prompts arrive as a prop from the shell; consume once, then clear.
+  React.useEffect(() => {
+    if (pendingPrompt === null) return;
+    onPromptSent();
+    if (needsKey) {
+      setShowApiKeyDialog(true);
+      return;
+    }
+    agent.send({ message: pendingPrompt, clientContext: buildContext() }).catch(() => undefined);
+  }, [pendingPrompt, needsKey, agent, onPromptSent]);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -271,7 +305,8 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
           {data.messages.length === 0 ? (
             <div className="flex flex-col gap-3 pt-6">
               <p className="px-1 text-sm text-muted-foreground">
-                Manage your inbox by talking to it — triage, summarize, archive, or draft replies.
+                Keep up with your workspace by talking to it — catch up on channels, summarize
+                threads, draft messages, or clear unreads.
               </p>
               <div className="flex flex-col items-start gap-1.5">
                 {EXAMPLE_PROMPTS.map((prompt) => (
@@ -317,7 +352,7 @@ export function ChatPanel({ onClose }: ChatPanelProps) {
             onFocus={() => {
               if (needsKey) setShowApiKeyDialog(true);
             }}
-            placeholder="Ask about your inbox…"
+            placeholder="Ask about your workspace…"
             rows={2}
             className="min-h-0 resize-none border-0 bg-transparent p-1 shadow-none focus-visible:ring-0 dark:bg-transparent"
             disabled={isLoading}
@@ -380,10 +415,10 @@ type DynamicToolPart = Extract<EveMessagePart, { type: "dynamic-tool" }>;
 
 /** Loose view of tool inputs, for the chip label only. */
 const toolInputPreviewSchema = z.object({
-  updates: z.array(z.unknown()).optional(),
-  threadIds: z.array(z.string()).optional(),
-  value: z.boolean().optional(),
-  unread: z.boolean().optional(),
+  name: z.string().optional(),
+  emoji: z.string().optional(),
+  text: z.string().optional(),
+  conversationIds: z.array(z.string()).optional(),
 });
 
 type ToolInputPreview = z.infer<typeof toolInputPreviewSchema>;
@@ -395,33 +430,30 @@ type ToolPartDisplay = {
 };
 
 const TOOL_DISPLAYS: Record<string, ToolPartDisplay> = {
-  triage_threads: {
-    icon: InboxIcon,
-    active: "Triaging threads…",
-    done: (input) => `Triaged ${pluralize(input.updates?.length ?? 0, "thread")}`,
-  },
-  draft_reply: {
+  draft_message: {
     icon: PenLineIcon,
-    active: "Drafting a reply…",
+    active: "Drafting a message…",
     done: () => "Draft placed in composer",
   },
-  archive_threads: {
-    icon: ArchiveIcon,
-    active: "Updating archive state…",
-    done: (input) =>
-      `${input.value === false ? "Unarchived" : "Archived"} ${pluralize(input.threadIds?.length ?? 0, "thread")}`,
+  create_channel: {
+    icon: HashIcon,
+    active: "Creating a channel…",
+    done: (input) => `Created #${input.name ?? "channel"}`,
   },
-  star_threads: {
-    icon: StarIcon,
-    active: "Updating stars…",
-    done: (input) =>
-      `${input.value === false ? "Unstarred" : "Starred"} ${pluralize(input.threadIds?.length ?? 0, "thread")}`,
+  add_reaction: {
+    icon: SmilePlusIcon,
+    active: "Adding a reaction…",
+    done: (input) => `Reacted with ${input.emoji ?? "an emoji"}`,
   },
-  mark_threads: {
-    icon: MailCheckIcon,
-    active: "Updating read state…",
-    done: (input) =>
-      `Marked ${pluralize(input.threadIds?.length ?? 0, "thread")} as ${input.unread === true ? "unread" : "read"}`,
+  mark_read: {
+    icon: CheckCheckIcon,
+    active: "Clearing unreads…",
+    done: (input) => `Marked ${pluralize(input.conversationIds?.length ?? 0, "conversation")} read`,
+  },
+  set_status: {
+    icon: UserRoundIcon,
+    active: "Updating your status…",
+    done: (input) => `Status: ${input.emoji ?? ""} ${input.text ?? ""}`.trim(),
   },
 };
 
