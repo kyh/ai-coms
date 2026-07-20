@@ -61,7 +61,7 @@ pnpm build        # production build (Next). Vercel builds the eve service via w
 
 - **Provisioning is `pnpm install`.** No database, no auth, no Docker, no bootstrap script — the workspace seeds itself into `localStorage["ai-coms-workspace"]` on first page load, so "open the page" is this repo's seeded-login analogue. "Reset demo data" in the sidebar restores the fixture.
 - **Verify**: `pnpm verify` for the static gate, then drive the running app with `agent-browser` — web is the only surface and it is fully headless-driveable. There is no CI here, so `pnpm verify` is the only gate.
-- **Assistant turns need `AI_GATEWAY_API_KEY` in `.env.local`.** In dev the BYO-key dialog is bypassed, so without a key a turn fails at the model call — expected, not a regression. Every non-AI surface verifies offline.
+- **Assistant turns need `AI_GATEWAY_API_KEY` in `.env.local`.** In dev only the pre-send gate is bypassed; without a key the turn still fails at the model call and `onError` pops an "Invalid API key" toast **plus the modal key dialog** — expected, not a regression, but it blocks browser automation until cancelled. Every non-AI surface verifies offline.
 - **Never assert on rendered timestamps** — the seed computes every `at` relative to `Date.now()` at first load. Assert on message bodies, channel names, unread counts.
 
 ## Conventions

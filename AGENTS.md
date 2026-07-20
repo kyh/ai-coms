@@ -37,33 +37,43 @@ Static gate — run before every commit:
 
 ```sh
 pnpm verify       # typecheck · lint · format
-pnpm build        # slower; also compiles the eve service
+pnpm build        # slower; Next only — Vercel compiles the eve service via withEve
 ```
+
+`withEve` does **not** compile `agent/` during `pnpm build`; it only writes `.vercel/output/config.json` declaring an `eve` service for Vercel to build later. Locally, `tsc` (via `pnpm typecheck`) is what covers `agent/`. `eve build` is the only real eve compile — and it must never run while `pnpm dev` is up.
 
 This repo has **no CI workflow**, so `pnpm verify` is the only gate that will ever run on your change. `pnpm format` is check-only; use `pnpm format:fix` to actually rewrite.
 
-Runtime — drive the real UI with [agent-browser](https://github.com/vercel-labs/agent-browser). This exact sequence is known to work:
+Runtime — drive the real UI with [agent-browser](https://github.com/vercel-labs/agent-browser). This sequence was run against this commit:
 
 ```sh
 agent-browser open http://localhost:3000
-agent-browser snapshot -i -c              # interactive elements only, with @eN refs
-agent-browser find text engineering click # opens #engineering
-agent-browser snapshot -i -c              # the "engineering 6" unread badge is gone
-agent-browser scrollintoview @e21         # the "N replies" button (ref from the last snapshot)
-agent-browser click @e21                  # thread pane replaces the assistant rail
-agent-browser fill @e7 "hello from an agent"   # the "Message #engineering" composer
-agent-browser press Enter                 # sends; the composer clears
+agent-browser wait 2000                          # let the store rehydrate (see gotchas)
+agent-browser find text engineering click        # opens #engineering
+agent-browser snapshot -i -c                     # badge gone; READ THE CURRENT REFS HERE
+# The thread affordance is the button whose accessible name starts with a reply
+# count — on the seeded #engineering it reads `4 replies Last reply …`. Take its
+# @eN ref from the snapshot you just printed; the @e21 below is illustrative.
+agent-browser scrollintoview @e21
+agent-browser click @e21                         # thread pane replaces the assistant rail
+agent-browser find role button click "Close thread"
+agent-browser find placeholder "Message #engineering" fill "hello from an agent"
+agent-browser press Enter                        # sends; the composer clears
 agent-browser screenshot /tmp/after.png
 ```
+
+Prefer content locators (`find text`, `find role`, `find placeholder`) over `@eN` refs wherever they work — they survive renumbering. The one exception is the "N replies" button: `find text "4 replies"` does **not** match it (the text lives in a nested span and the accessible name carries a timestamp), and `find role button click "4 replies"` resolves but the click is a silent no-op while the message is above the fold. Snapshot → `scrollintoview @ref` → `click @ref` is the only sequence that opens the thread.
 
 Everything else in the workspace is reachable the same way and needs no key: reaction pills (bare-count buttons under a message) toggle your reaction, "New channel" creates one, "Reset demo data" restores the fixture, and the assistant rail toggles from the header "Assistant" button or `⌘K` / `Ctrl+K`. To read state instead of the a11y tree:
 `agent-browser eval "JSON.parse(localStorage.getItem('ai-coms-workspace')).state.messages.at(-1)"`.
 
-Three gotchas, all observed:
+Five gotchas, all observed:
 
 - **Wait for hydration.** First paint is `<AppSkeleton />` until the store rehydrates in an effect. A snapshot taken too early shows only skeletons — re-snapshot (or `agent-browser wait 500`) until a channel name such as `general` appears before asserting anything.
-- **The message list is a scroll container pinned to the bottom.** A real mouse click on something above the fold — the "N replies" affordance on an older message, an early reaction pill — silently does nothing. `scrollintoview` first, then click.
-- **Port collisions.** If something else holds `:3000`, Next picks another port — read the port off `pnpm dev`'s output rather than assuming 3000, or pin it with `PORT=3100 pnpm dev`.
+- **`@eN` refs are valid only for the snapshot that produced them.** They are DOM-order artifacts and renumber on every navigation, seed edit, or added control — on `#general` the very same `@e21` is a reaction pill, not the thread button. Re-snapshot immediately before any ref-based step, and never copy a ref out of these docs.
+- **The message list is a scroll container pinned to the bottom.** A real mouse click on something above the fold — the "N replies" affordance on an older message, an early reaction pill, an assistant example prompt — silently does nothing and still reports success. `scrollintoview` first, then click.
+- **A keyless assistant turn opens a modal.** See below — dismiss it with `find role button click "Cancel"` before continuing, or skip the assistant entirely when no key is configured.
+- **Port collisions.** If something else holds `:3000`, Next picks another port — read the port off `pnpm dev`'s output rather than assuming 3000, or pin it with `pnpm dev --port 3100`.
 
 Don't stop at `pnpm verify` — exercise the actual flow and observe the result.
 
@@ -74,7 +84,13 @@ Don't stop at `pnpm verify` — exercise the actual flow and observe the result.
 | Workspace: channels, DMs, threads, reactions, drafts, composer, channel creation, reset | No — fully verifiable offline      |
 | Assistant turns (catch me up, summarize, draft, tool calls)                             | Yes — every turn ends at the model |
 
-In development the BYO-key dialog is bypassed (`src/components/chat/chat-panel.tsx`: `needsKey = !apiKey && process.env.NODE_ENV !== "development"`), so the panel accepts input and the request reaches the server — which then fails at the model call and surfaces a toast if no key is configured. That failure is _expected_ without a key; it is not a regression. In production, keyless visitors get the key dialog and the agent runs on their own key.
+In development only the **pre-send** gate is bypassed (`src/components/chat/chat-panel.tsx`: `needsKey = !apiKey && process.env.NODE_ENV !== "development"`), so the panel accepts input and the request reaches the server. Without a key the model call then fails, and `onError` classifies it as an auth error — which means all three of these happen, verified:
+
+- the server logs `[eve:harness.tool-loop] AI Gateway authentication failed`
+- a toast reads **"Invalid API key…"** — misleading, since no key was ever entered
+- the **modal** "Enter Vercel Gateway API Key" dialog opens and covers the workspace
+
+That is _expected_ without a key; it is not a regression. But the modal blocks every subsequent agent-browser step, so dismiss it (`find role button click "Cancel"`) or don't drive the assistant at all when `AI_GATEWAY_API_KEY` is unset. After dismissing, an inline notice stays in the panel offering "add yours". In production the pre-send gate is live too, so keyless visitors get the dialog _before_ any request and the agent then runs on their own key.
 
 ## Platform matrix
 
