@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-settings.json",
+  "prompt": "This template is built to be driven by coding agents — read AGENTS.md first. Provisioning is `pnpm install` and nothing else: there is no database and no auth, and the demo workspace seeds itself into localStorage on first page load. Set AI_GATEWAY_API_KEY in .env.local to exercise the assistant; every non-AI surface works without it.",
+  "permissions": {
+    "allow": [
+      "Bash(pnpm dev:*)",
+      "Bash(pnpm verify:*)",
+      "Bash(pnpm typecheck:*)",
+      "Bash(agent-browser:*)"
+    ]
+  }
+}
