@@ -152,7 +152,7 @@ export const buildWorkspaceContext = ({
         id: user.id,
         name: user.name,
         presence: user.presence,
-        ...(user.title === undefined ? {} : { title: user.title }),
+        title: user.title,
       })),
     conversations: conversations.map((conversation) => ({
       id: conversation.id,

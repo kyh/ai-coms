@@ -57,17 +57,19 @@ export function CreateChannelDialog({ open, onOpenChange }: CreateChannelDialogP
             </DialogDescription>
           </DialogHeader>
           <div className="flex flex-col gap-3 py-4">
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
+            <label htmlFor="channel-name" className="flex flex-col gap-1.5 text-sm font-medium">
               Name
               <div className="relative">
                 <span className="pointer-events-none absolute top-1/2 left-2.5 -translate-y-1/2 text-sm text-muted-foreground">
                   #
                 </span>
                 <Input
+                  id="channel-name"
                   value={name}
                   onChange={(event) => setName(event.target.value)}
                   placeholder="launch-4-12"
                   className="pl-6"
+                  // oxlint-disable-next-line jsx-a11y/no-autofocus -- first field of a modal opened on user intent
                   autoFocus
                 />
               </div>
@@ -77,9 +79,10 @@ export function CreateChannelDialog({ open, onOpenChange }: CreateChannelDialogP
                 </span>
               )}
             </label>
-            <label className="flex flex-col gap-1.5 text-sm font-medium">
+            <label htmlFor="channel-purpose" className="flex flex-col gap-1.5 text-sm font-medium">
               Purpose
               <Input
+                id="channel-purpose"
                 value={purpose}
                 onChange={(event) => setPurpose(event.target.value)}
                 placeholder="Coordinating the 4.12 release"
