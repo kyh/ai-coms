@@ -45,7 +45,7 @@ Flow: chat panel `send({ message, clientContext: workspaceDigest })` → eve cha
 
 ```bash
 pnpm dev          # dev server — boots Next.js AND the eve agent runtime
-pnpm verify       # typecheck · lint · format (the only gate; this repo has no CI)
+pnpm verify       # typecheck · lint · format · test (the only gate; this repo has no CI)
 pnpm typecheck    # tsc --noEmit (covers agent/ too)
 pnpm lint         # oxlint (warnings are errors)
 pnpm format       # oxfmt --check

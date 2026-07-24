@@ -36,7 +36,7 @@ Assertion rule: every seed timestamp is derived from `Date.now()` at first load,
 Static gate — run before every commit:
 
 ```sh
-pnpm verify       # typecheck · lint · format
+pnpm verify       # typecheck · lint · format · test
 pnpm build        # slower; Next only — Vercel compiles the eve service via withEve
 ```
 
