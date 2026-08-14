@@ -229,7 +229,7 @@ export function ChatPanel({ onClose, pendingPrompt, onPromptSent }: ChatPanelPro
       setShowApiKeyDialog(true);
       return;
     }
-    agent.send({ message: trimmed, clientContext: buildContext() }).catch(() => undefined); // failures surface via status/error/onError
+    agent.send(trimmed, { clientContext: buildContext() }).catch(() => undefined); // failures surface via status/error/onError
     setInput("");
   };
 
@@ -241,7 +241,7 @@ export function ChatPanel({ onClose, pendingPrompt, onPromptSent }: ChatPanelPro
       setShowApiKeyDialog(true);
       return;
     }
-    agent.send({ message: pendingPrompt, clientContext: buildContext() }).catch(() => undefined);
+    agent.send(pendingPrompt, { clientContext: buildContext() }).catch(() => undefined);
   }, [pendingPrompt, needsKey, agent, onPromptSent]);
 
   const handleSubmit = (event: React.FormEvent) => {

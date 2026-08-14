@@ -119,7 +119,7 @@ const byTime = (a: Message, b: Message): number =>
 
 /** Every message in a conversation, thread replies included, oldest first. */
 export const conversationMessages = (messages: Message[], conversationId: string): Message[] =>
-  messages.filter((message) => message.conversationId === conversationId).sort(byTime);
+  messages.filter((message) => message.conversationId === conversationId).toSorted(byTime);
 
 /** Top-level messages (not thread replies) in a conversation, oldest first. */
 export const rootMessages = (messages: Message[], conversationId: string): Message[] =>
@@ -127,11 +127,11 @@ export const rootMessages = (messages: Message[], conversationId: string): Messa
     .filter(
       (message) => message.conversationId === conversationId && message.parentId === undefined,
     )
-    .sort(byTime);
+    .toSorted(byTime);
 
 /** Replies hanging off a parent message, oldest first. */
 export const threadReplies = (messages: Message[], messageId: string): Message[] =>
-  messages.filter((message) => message.parentId === messageId).sort(byTime);
+  messages.filter((message) => message.parentId === messageId).toSorted(byTime);
 
 /**
  * Unread = anything posted after `lastReadAt` that the current user did not
