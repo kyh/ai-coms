@@ -87,6 +87,8 @@ export type WorkspaceContext = z.infer<typeof workspaceContextSchema>;
 
 type ContextMessage = z.infer<typeof contextMessageSchema>;
 
+type ActiveConversation = z.infer<typeof activeConversationSchema>;
+
 const displayTitle = (conversation: Conversation, users: User[]): string =>
   conversation.kind === "channel"
     ? `#${conversation.name}`
@@ -105,15 +107,16 @@ const toContextMessage = (
 ): ContextMessage => {
   const author = users.find((user) => user.id === message.authorId)?.name ?? message.authorId;
   const replies = message.parentId === undefined ? threadReplies(allMessages, message.id) : [];
-  return {
+  const contextMessage: ContextMessage = {
     id: message.id,
     author,
     at: message.at,
     body: message.body,
     reactions: message.reactions,
-    ...(message.parentId === undefined ? {} : { parentId: message.parentId }),
-    ...(replies.length > 0 ? { replyCount: replies.length } : {}),
   };
+  if (message.parentId !== undefined) contextMessage.parentId = message.parentId;
+  if (replies.length > 0) contextMessage.replyCount = replies.length;
+  return contextMessage;
 };
 
 interface WorkspaceContextInput {
@@ -138,7 +141,7 @@ export const buildWorkspaceContext = ({
   const active = conversations.find((conversation) => conversation.id === selectedConversationId);
   const openThreadParent = messages.find((message) => message.id === openThreadId);
 
-  return {
+  const context: WorkspaceContext = {
     now: new Date().toISOString(),
     timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     me: {
@@ -162,29 +165,30 @@ export const buildWorkspaceContext = ({
       muted: isMuted(conversation),
       lastActivityAt: lastActivityAt(messages, conversation.id),
     })),
-    ...(active === undefined
-      ? {}
-      : {
-          activeConversation: {
-            id: active.id,
-            kind: active.kind,
-            title: displayTitle(active, users),
-            ...(active.kind === "channel" ? { purpose: active.purpose } : {}),
-            memberCount: memberCount(active),
-            messages: conversationMessages(messages, active.id)
-              .slice(-ACTIVE_MESSAGE_LIMIT)
-              .map((message) => toContextMessage(message, users, messages)),
-          },
-        }),
-    ...(openThreadParent === undefined
-      ? {}
-      : {
-          openThread: {
-            parentMessageId: openThreadParent.id,
-            messages: [openThreadParent, ...threadReplies(messages, openThreadParent.id)].map(
-              (message) => toContextMessage(message, users, messages),
-            ),
-          },
-        }),
   };
+
+  if (active !== undefined) {
+    const activeConversation: ActiveConversation = {
+      id: active.id,
+      kind: active.kind,
+      title: displayTitle(active, users),
+      memberCount: memberCount(active),
+      messages: conversationMessages(messages, active.id)
+        .slice(-ACTIVE_MESSAGE_LIMIT)
+        .map((message) => toContextMessage(message, users, messages)),
+    };
+    if (active.kind === "channel") activeConversation.purpose = active.purpose;
+    context.activeConversation = activeConversation;
+  }
+
+  if (openThreadParent !== undefined) {
+    context.openThread = {
+      parentMessageId: openThreadParent.id,
+      messages: [openThreadParent, ...threadReplies(messages, openThreadParent.id)].map((message) =>
+        toContextMessage(message, users, messages),
+      ),
+    };
+  }
+
+  return context;
 };

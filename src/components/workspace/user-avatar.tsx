@@ -6,7 +6,7 @@ import { initials, type AvatarColor, type User } from "@/lib/workspace";
  * Static class strings, one per palette token — Tailwind can only see classes
  * it can read literally, so these must never be interpolated.
  */
-const AVATAR_CLASSES: Record<AvatarColor, string> = {
+const AVATAR_CLASSES = {
   rose: "bg-rose-500/20 text-rose-700 dark:text-rose-300",
   amber: "bg-amber-500/20 text-amber-700 dark:text-amber-300",
   emerald: "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300",
@@ -15,7 +15,7 @@ const AVATAR_CLASSES: Record<AvatarColor, string> = {
   fuchsia: "bg-fuchsia-500/20 text-fuchsia-700 dark:text-fuchsia-300",
   cyan: "bg-cyan-500/20 text-cyan-700 dark:text-cyan-300",
   lime: "bg-lime-600/20 text-lime-700 dark:text-lime-300",
-};
+} satisfies Record<AvatarColor, string>;
 
 interface UserAvatarProps {
   user: User;

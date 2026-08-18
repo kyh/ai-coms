@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import type { MessageStreamEvent, SubagentChildEventStreamEvent } from "eve/client";
 import type { EveMessage, EveMessagePart } from "eve/react";
 import { useEveAgent } from "eve/react";
 import {
@@ -76,41 +77,24 @@ const resolveAuthHeaders = (): Readonly<Record<string, string>> => {
 //
 // eve streams every tool result as an `action.result` event whose
 // `data.result` is `{ kind: "tool-result", toolName, output, isError? }`,
-// where `output` is the tool's full `execute` return value. Each payload is
-// zod-parsed against the shared schemas before touching the store.
+// where `output` is the tool's full `execute` return value. The envelope is
+// narrowed on eve's own protocol types; each payload is zod-parsed against
+// the shared schemas before touching the store.
 // -----------------------------------------------------------------------------
 
-const toolResultEventSchema = z.object({
-  type: z.literal("action.result"),
-  data: z.object({
-    status: z.enum(["completed", "failed", "rejected"]),
-    result: z.object({
-      kind: z.literal("tool-result"),
-      toolName: z.string(),
-      output: z.unknown(),
-      isError: z.boolean().optional(),
-    }),
-  }),
-});
+/** `subagent.event` wraps a child session's (unstamped) stream event under `data.event`. */
+type AgentStreamEvent = MessageStreamEvent | SubagentChildEventStreamEvent["data"]["event"];
 
-/** `subagent.event` wraps a child session's stream event under `data.event`. */
-const subagentEventSchema = z.object({
-  type: z.literal("subagent.event"),
-  data: z.object({ event: z.unknown() }),
-});
-
-const applyToolResult = (event: unknown): void => {
+const applyToolResult = (event: AgentStreamEvent): void => {
   // Delegation is forbidden by the instructions, but if the model strays,
   // unwrap the child's events so its tool results still reach the store.
-  const wrapped = subagentEventSchema.safeParse(event);
-  if (wrapped.success) {
-    applyToolResult(wrapped.data.data.event);
+  if (event.type === "subagent.event") {
+    applyToolResult(event.data.event);
     return;
   }
-  const parsed = toolResultEventSchema.safeParse(event);
-  if (!parsed.success) return;
-  const { status, result } = parsed.data.data;
-  if (status !== "completed" || result.isError === true) return;
+  if (event.type !== "action.result") return;
+  const { status, result } = event.data;
+  if (status !== "completed" || result.kind !== "tool-result" || result.isError === true) return;
 
   const store = useWorkspaceStore.getState();
   switch (result.toolName) {
@@ -429,7 +413,7 @@ type ToolPartDisplay = {
   done: (input: ToolInputPreview) => string;
 };
 
-const TOOL_DISPLAYS: Record<string, ToolPartDisplay> = {
+const TOOL_DISPLAYS = {
   draft_message: {
     icon: PenLineIcon,
     active: "Drafting a message…",
@@ -455,10 +439,16 @@ const TOOL_DISPLAYS: Record<string, ToolPartDisplay> = {
     active: "Updating your status…",
     done: (input) => `Status: ${input.emoji ?? ""} ${input.text ?? ""}`.trim(),
   },
-};
+} satisfies Record<string, ToolPartDisplay>;
+
+const isDisplayedTool = (toolName: string): toolName is keyof typeof TOOL_DISPLAYS =>
+  toolName in TOOL_DISPLAYS;
+
+const toolDisplay = (toolName: string): ToolPartDisplay | undefined =>
+  isDisplayedTool(toolName) ? TOOL_DISPLAYS[toolName] : undefined;
 
 function ToolChip({ part }: { part: DynamicToolPart }) {
-  const display = TOOL_DISPLAYS[part.toolName];
+  const display = toolDisplay(part.toolName);
   if (!display) return null;
 
   const done = part.state === "output-available";
