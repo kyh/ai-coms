@@ -36,10 +36,12 @@ export function ConversationView({ onAskAssistant }: ConversationViewProps) {
 
   const bottomRef = React.useRef<HTMLDivElement>(null);
   const visible = conversation ? rootMessages(messages, conversation.id) : [];
-  const messageCount = visible.length;
+  /** Pin to the newest message: its id changes both on arrival and on switching conversation. */
+  const newestMessageId = visible.at(-1)?.id ?? null;
   React.useEffect(() => {
+    if (newestMessageId === null) return;
     bottomRef.current?.scrollIntoView({ block: "end" });
-  }, [selectedConversationId, messageCount]);
+  }, [newestMessageId]);
 
   if (!conversation) {
     return (

@@ -15,6 +15,8 @@ import { MessageList } from "./message-list";
  * The thread pane overlays the assistant panel rather than adding a fifth
  * column: at most one of the two is useful at a time, and overlaying keeps the
  * assistant mounted so its transcript survives opening a thread.
+ *
+ * Callers key this on the open thread id so the reply draft resets per thread.
  */
 export function ThreadPane() {
   const users = useWorkspaceStore((state) => state.users);
@@ -31,10 +33,6 @@ export function ThreadPane() {
   React.useEffect(() => {
     if (openThreadId !== null && parent === undefined) closeThread();
   }, [openThreadId, parent, closeThread]);
-
-  React.useEffect(() => {
-    setReply("");
-  }, [openThreadId]);
 
   if (!parent) return null;
 

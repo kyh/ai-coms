@@ -169,14 +169,17 @@ const applyToolResult = (event: AgentStreamEvent): void => {
 const isAuthError = (error: Error): boolean =>
   /unauthorized|forbidden|authentication|api.?key|credential|401|403/i.test(error.message);
 
-interface ChatPanelProps {
-  onClose: () => void;
-  /** One-shot canned prompt from the shell (the conversation "Summarize" button). */
-  pendingPrompt: string | null;
-  onPromptSent: () => void;
+export interface ChatPanelHandle {
+  /** Sends a canned prompt from the shell (the conversation "Summarize" button). */
+  send: (prompt: string) => void;
 }
 
-export function ChatPanel({ onClose, pendingPrompt, onPromptSent }: ChatPanelProps) {
+interface ChatPanelProps {
+  ref?: React.Ref<ChatPanelHandle>;
+  onClose: () => void;
+}
+
+export function ChatPanel({ ref, onClose }: ChatPanelProps) {
   const [input, setInput] = React.useState("");
   const [showApiKeyDialog, setShowApiKeyDialog] = React.useState(false);
   const [apiKey, , removeApiKey] = useLocalStorage(GATEWAY_API_KEY_STORAGE_KEY, "");
@@ -195,38 +198,34 @@ export function ChatPanel({ onClose, pendingPrompt, onPromptSent }: ChatPanelPro
       }
     },
   });
-  const { data, status, error } = agent;
+  const { data, status, error, send } = agent;
 
   const isLoading = status === "submitted" || status === "streaming";
   const showKeyNotice = status === "error" && error !== undefined && isAuthError(error);
 
+  /** Idle with an empty transcript is the example-prompt state — nothing to pin to. */
   React.useEffect(() => {
+    if (data.messages.length === 0 && status === "ready") return;
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [data.messages, status]);
 
   const needsKey = !apiKey && process.env.NODE_ENV !== "development";
 
-  const sendPrompt = (text: string) => {
-    const trimmed = text.trim();
-    if (!trimmed || isLoading) return;
-    if (needsKey) {
-      setShowApiKeyDialog(true);
-      return;
-    }
-    agent.send(trimmed, { clientContext: buildContext() }).catch(() => undefined); // failures surface via status/error/onError
-    setInput("");
-  };
+  const sendPrompt = React.useCallback(
+    (text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed || isLoading) return;
+      if (needsKey) {
+        setShowApiKeyDialog(true);
+        return;
+      }
+      send(trimmed, { clientContext: buildContext() }).catch(() => undefined); // failures surface via status/error/onError
+      setInput("");
+    },
+    [send, isLoading, needsKey],
+  );
 
-  // Canned prompts arrive as a prop from the shell; consume once, then clear.
-  React.useEffect(() => {
-    if (pendingPrompt === null) return;
-    onPromptSent();
-    if (needsKey) {
-      setShowApiKeyDialog(true);
-      return;
-    }
-    agent.send(pendingPrompt, { clientContext: buildContext() }).catch(() => undefined);
-  }, [pendingPrompt, needsKey, agent, onPromptSent]);
+  React.useImperativeHandle(ref, () => ({ send: sendPrompt }), [sendPrompt]);
 
   const handleSubmit = (event: React.FormEvent) => {
     event.preventDefault();

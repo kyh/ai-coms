@@ -66,7 +66,12 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
   return <div className="px-2 pt-4 pb-1 text-xs font-medium text-muted-foreground">{children}</div>;
 }
 
-export function WorkspaceSidebar() {
+interface WorkspaceSidebarProps {
+  /** Fired after a conversation is picked, so the mobile slide-over can dismiss itself. */
+  onNavigate?: () => void;
+}
+
+export function WorkspaceSidebar({ onNavigate }: WorkspaceSidebarProps) {
   const users = useWorkspaceStore((state) => state.users);
   const conversations = useWorkspaceStore((state) => state.conversations);
   const messages = useWorkspaceStore((state) => state.messages);
@@ -76,6 +81,11 @@ export function WorkspaceSidebar() {
   const resetWorkspace = useWorkspaceStore((state) => state.resetWorkspace);
 
   const [createOpen, setCreateOpen] = React.useState(false);
+
+  const openConversation = (conversationId: string) => {
+    selectConversation(conversationId);
+    onNavigate?.();
+  };
 
   const me = users.find((user) => user.id === ME);
   const channels = conversations.filter((conversation) => conversation.kind === "channel");
@@ -104,7 +114,7 @@ export function WorkspaceSidebar() {
               users={users}
               unread={unreadCount(conversation, messages)}
               active={conversation.id === selectedConversationId}
-              onSelect={() => selectConversation(conversation.id)}
+              onSelect={() => openConversation(conversation.id)}
             />
           ))}
           <button
@@ -124,7 +134,7 @@ export function WorkspaceSidebar() {
               users={users}
               unread={unreadCount(conversation, messages)}
               active={conversation.id === selectedConversationId}
-              onSelect={() => selectConversation(conversation.id)}
+              onSelect={() => openConversation(conversation.id)}
             />
           ))}
         </div>

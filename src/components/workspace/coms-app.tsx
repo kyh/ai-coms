@@ -3,7 +3,7 @@
 import * as React from "react";
 import { MenuIcon, SparklesIcon } from "lucide-react";
 
-import { ChatPanel } from "@/components/chat/chat-panel";
+import { ChatPanel, type ChatPanelHandle } from "@/components/chat/chat-panel";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
@@ -40,16 +40,15 @@ function AppSkeleton() {
 export function ComsApp() {
   const hydrated = useWorkspaceStore((state) => state.hydrated);
   const openThreadId = useWorkspaceStore((state) => state.openThreadId);
-  const selectedConversationId = useWorkspaceStore((state) => state.selectedConversationId);
 
   const [chatOpen, setChatOpen] = React.useState(true);
   /** Below md the sidebar is a slide-over; picking a conversation dismisses it. */
   const [navOpen, setNavOpen] = React.useState(false);
   /**
-   * Canned prompts (the "Summarize" header button) travel to the chat panel as
-   * a one-shot: the panel sends it and calls back to clear it.
+   * The panel is always mounted, so canned prompts (the "Summarize" header
+   * button) are handed to it imperatively rather than round-tripped as state.
    */
-  const [pendingPrompt, setPendingPrompt] = React.useState<string | null>(null);
+  const chatPanelRef = React.useRef<ChatPanelHandle>(null);
 
   React.useEffect(() => {
     void useWorkspaceStore.persist.rehydrate();
@@ -66,11 +65,6 @@ export function ComsApp() {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
-  /** Picking a conversation in the slide-over dismisses it. */
-  React.useEffect(() => {
-    setNavOpen(false);
-  }, [selectedConversationId]);
-
   /**
    * Below lg the rail covers the conversation; below md the slide-over covers
    * it. Mark whatever is underneath `inert` so it leaves the a11y/focus tree.
@@ -78,16 +72,13 @@ export function ComsApp() {
   const showRail = chatOpen || openThreadId !== null;
   const railIsOverlay = !useMediaQuery("(min-width: 64rem)");
   const navIsOverlay = !useMediaQuery("(min-width: 48rem)");
-  const coversConversation = (navOpen && navIsOverlay) || (showRail && railIsOverlay);
-
-  /** The slide-over only exists below md; don't strand `navOpen` on resize. */
-  React.useEffect(() => {
-    if (!navIsOverlay) setNavOpen(false);
-  }, [navIsOverlay]);
+  /** The slide-over exists only below md, so `navOpen` alone never opens it. */
+  const navOverlayOpen = navOpen && navIsOverlay;
+  const coversConversation = navOverlayOpen || (showRail && railIsOverlay);
 
   const askAssistant = (prompt: string) => {
     setChatOpen(true);
-    setPendingPrompt(prompt);
+    chatPanelRef.current?.send(prompt);
   };
 
   return (
@@ -99,7 +90,7 @@ export function ComsApp() {
           className="md:hidden"
           onClick={() => setNavOpen((open) => !open)}
           aria-label="Toggle conversations"
-          aria-expanded={navOpen}
+          aria-expanded={navOverlayOpen}
         >
           <MenuIcon />
         </Button>
@@ -130,10 +121,10 @@ export function ComsApp() {
           <div className="hidden w-60 shrink-0 border-r md:block">
             <WorkspaceSidebar />
           </div>
-          {navOpen && (
+          {navOverlayOpen && (
             <div className="fixed inset-0 z-50 flex md:hidden">
               <div className="w-60 max-w-[80%] border-r bg-background">
-                <WorkspaceSidebar />
+                <WorkspaceSidebar onNavigate={() => setNavOpen(false)} />
               </div>
               <button
                 type="button"
@@ -160,15 +151,11 @@ export function ComsApp() {
             )}
           >
             <div className={cn("h-full", !chatOpen && "hidden")} inert={openThreadId !== null}>
-              <ChatPanel
-                onClose={() => setChatOpen(false)}
-                pendingPrompt={pendingPrompt}
-                onPromptSent={() => setPendingPrompt(null)}
-              />
+              <ChatPanel ref={chatPanelRef} onClose={() => setChatOpen(false)} />
             </div>
             {openThreadId !== null && (
               <div className="absolute inset-0 bg-background">
-                <ThreadPane />
+                <ThreadPane key={openThreadId} />
               </div>
             )}
           </div>
