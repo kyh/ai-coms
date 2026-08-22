@@ -36,13 +36,13 @@ Assertion rule: every seed timestamp is derived from `Date.now()` at first load,
 Static gate — run before every commit:
 
 ```sh
-pnpm verify       # typecheck · lint · format · test
+pnpm verify       # typecheck · lint · format
 pnpm build        # slower; Next only — Vercel compiles the eve service via withEve
 ```
 
 `withEve` does **not** compile `agent/` during `pnpm build`; it only writes `.vercel/output/config.json` declaring an `eve` service for Vercel to build later. Locally, `tsc` (via `pnpm typecheck`) is what covers `agent/`. `eve build` is the only real eve compile — and it must never run while `pnpm dev` is up.
 
-This repo has **no CI workflow**, so `pnpm verify` is the only gate that will ever run on your change. `pnpm format` is check-only; use `pnpm format:fix` to actually rewrite.
+This repo has **no CI workflow**, so `pnpm verify` is the only gate that will ever run on your change. `pnpm format` is check-only; use `pnpm format:fix` to actually rewrite. `pnpm test` is wired to Node's built-in runner (`node --import tsx --test 'src/**/*.test.ts'`) but no tests are written yet, so it exits non-zero and is deliberately left out of `verify` — add `&& pnpm test` back with the first test file.
 
 Runtime — drive the real UI with [agent-browser](https://github.com/vercel-labs/agent-browser). This sequence was run against this commit:
 
