@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useMediaQuery } from "@/hooks/use-media-query";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 import { useWorkspaceStore } from "@/lib/workspace-store";
 import { ConversationView } from "./conversation-view";
 import { ThreadPane } from "./thread-pane";
