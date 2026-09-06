@@ -1,4 +1,4 @@
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 import type { Presence } from "@/lib/workspace";
 
 /** Slack's convention: filled = online, hollow = away, hollow+dim = offline. */

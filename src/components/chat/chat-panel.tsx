@@ -33,7 +33,7 @@ import {
   markReadPayloadSchema,
   setStatusPayloadSchema,
 } from "@/lib/assistant-schemas";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 import { buildWorkspaceContext, type WorkspaceContext } from "@/lib/workspace-context";
 import { useWorkspaceStore } from "@/lib/workspace-store";
 import { ApiKeyDialog, GATEWAY_API_KEY_STORAGE_KEY } from "./api-key-dialog";

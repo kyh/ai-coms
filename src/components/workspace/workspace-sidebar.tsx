@@ -6,7 +6,7 @@ import { HashIcon, PlusIcon, RotateCcwIcon, VolumeOffIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
-import { cn } from "@/lib/utils";
+import { cn } from "cn";
 import { conversationTitle, ME, unreadCount, type Conversation, type User } from "@/lib/workspace";
 import { useWorkspaceStore } from "@/lib/workspace-store";
 import { CreateChannelDialog } from "./create-channel-dialog";
