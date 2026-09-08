@@ -18,7 +18,7 @@ import { MessageList } from "./message-list";
  *
  * Callers key this on the open thread id so the reply draft resets per thread.
  */
-export function ThreadPane() {
+export const ThreadPane = () => {
   const users = useWorkspaceStore((state) => state.users);
   const conversations = useWorkspaceStore((state) => state.conversations);
   const messages = useWorkspaceStore((state) => state.messages);
@@ -31,10 +31,14 @@ export function ThreadPane() {
 
   // A thread whose parent vanished (reset, corrupt storage) closes itself.
   React.useEffect(() => {
-    if (openThreadId !== null && parent === undefined) closeThread();
+    if (openThreadId !== null && parent === undefined) {
+      closeThread();
+    }
   }, [openThreadId, parent, closeThread]);
 
-  if (!parent) return null;
+  if (!parent) {
+    return null;
+  }
 
   const conversation = conversations.find((candidate) => candidate.id === parent.conversationId);
   const replies = threadReplies(messages, parent.id);
@@ -90,4 +94,4 @@ export function ThreadPane() {
       />
     </aside>
   );
-}
+};

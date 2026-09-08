@@ -23,7 +23,7 @@ interface ConversationViewProps {
   onAskAssistant: (prompt: string) => void;
 }
 
-export function ConversationView({ onAskAssistant }: ConversationViewProps) {
+export const ConversationView = ({ onAskAssistant }: ConversationViewProps) => {
   const users = useWorkspaceStore((state) => state.users);
   const conversations = useWorkspaceStore((state) => state.conversations);
   const messages = useWorkspaceStore((state) => state.messages);
@@ -39,7 +39,9 @@ export function ConversationView({ onAskAssistant }: ConversationViewProps) {
   /** Pin to the newest message: its id changes both on arrival and on switching conversation. */
   const newestMessageId = visible.at(-1)?.id ?? null;
   React.useEffect(() => {
-    if (newestMessageId === null) return;
+    if (newestMessageId === null) {
+      return;
+    }
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [newestMessageId]);
 
@@ -118,4 +120,4 @@ export function ConversationView({ onAskAssistant }: ConversationViewProps) {
       />
     </div>
   );
-}
+};

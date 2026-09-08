@@ -22,7 +22,7 @@ interface CreateChannelDialogProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export function CreateChannelDialog({ open, onOpenChange }: CreateChannelDialogProps) {
+export const CreateChannelDialog = ({ open, onOpenChange }: CreateChannelDialogProps) => {
   const createChannel = useWorkspaceStore((state) => state.createChannel);
   const [name, setName] = React.useState("");
   const [purpose, setPurpose] = React.useState("");
@@ -69,7 +69,6 @@ export function CreateChannelDialog({ open, onOpenChange }: CreateChannelDialogP
                   onChange={(event) => setName(event.target.value)}
                   placeholder="launch-4-12"
                   className="pl-6"
-                  // oxlint-disable-next-line jsx-a11y/no-autofocus -- first field of a modal opened on user intent
                   autoFocus
                 />
               </div>
@@ -99,4 +98,4 @@ export function CreateChannelDialog({ open, onOpenChange }: CreateChannelDialogP
       </DialogContent>
     </Dialog>
   );
-}
+};

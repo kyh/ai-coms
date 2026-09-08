@@ -7,38 +7,36 @@ import { MessageSquareIcon, SmilePlusIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { cn } from "cn";
-import {
-  ME,
-  messageGroups,
-  REACTION_EMOJI,
-  threadReplies,
-  type Message,
-  type User,
-} from "@/lib/workspace";
+import { ME, messageGroups, REACTION_EMOJI, threadReplies } from "@/lib/workspace";
+import type { Message, User } from "@/lib/workspace";
 import { useWorkspaceStore } from "@/lib/workspace-store";
 import { UserAvatar } from "./user-avatar";
 
 const dayLabel = (iso: string): string => {
   const date = new Date(iso);
-  if (isToday(date)) return "Today";
-  if (isYesterday(date)) return "Yesterday";
+  if (isToday(date)) {
+    return "Today";
+  }
+  if (isYesterday(date)) {
+    return "Yesterday";
+  }
   return format(date, "EEEE, MMMM d");
 };
 
-function DayDivider({ at }: { at: string }) {
-  return (
-    <div className="relative py-3">
-      <div className="absolute inset-x-0 top-1/2 h-px bg-border" />
-      <div className="relative mx-auto w-fit rounded-full border bg-background px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
-        {dayLabel(at)}
-      </div>
+const DayDivider = ({ at }: { at: string }) => (
+  <div className="relative py-3">
+    <div className="absolute inset-x-0 top-1/2 h-px bg-border" />
+    <div className="relative mx-auto w-fit rounded-full border bg-background px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
+      {dayLabel(at)}
     </div>
-  );
-}
+  </div>
+);
 
-function ReactionPills({ message, users }: { message: Message; users: User[] }) {
+const ReactionPills = ({ message, users }: { message: Message; users: User[] }) => {
   const toggleReaction = useWorkspaceStore((state) => state.toggleReaction);
-  if (message.reactions.length === 0) return null;
+  if (message.reactions.length === 0) {
+    return null;
+  }
 
   const nameOf = (userId: string): string =>
     userId === ME ? "You" : (users.find((user) => user.id === userId)?.name ?? "Someone");
@@ -67,9 +65,9 @@ function ReactionPills({ message, users }: { message: Message; users: User[] }) 
       })}
     </div>
   );
-}
+};
 
-function ReactionPicker({ messageId }: { messageId: string }) {
+const ReactionPicker = ({ messageId }: { messageId: string }) => {
   const toggleReaction = useWorkspaceStore((state) => state.toggleReaction);
   const [open, setOpen] = React.useState(false);
 
@@ -107,13 +105,15 @@ function ReactionPicker({ messageId }: { messageId: string }) {
       </PopoverContent>
     </Popover>
   );
-}
+};
 
-function ThreadAffordance({ message }: { message: Message }) {
+const ThreadAffordance = ({ message }: { message: Message }) => {
   const messages = useWorkspaceStore((state) => state.messages);
   const openThread = useWorkspaceStore((state) => state.openThread);
   const replies = threadReplies(messages, message.id);
-  if (replies.length === 0) return null;
+  if (replies.length === 0) {
+    return null;
+  }
 
   const last = replies.at(-1);
   return (
@@ -131,7 +131,7 @@ function ThreadAffordance({ message }: { message: Message }) {
       )}
     </button>
   );
-}
+};
 
 interface MessageListProps {
   messages: Message[];
@@ -147,12 +147,12 @@ interface MessageListProps {
  * that renders the avatar and byline once. Every row keeps its own hover
  * toolbar, reactions, and thread affordance.
  */
-export function MessageList({
+export const MessageList = ({
   messages,
   users,
   showThreads = true,
   showDayDividers = true,
-}: MessageListProps) {
+}: MessageListProps) => {
   const groups = messageGroups(messages);
 
   return (
@@ -201,4 +201,4 @@ export function MessageList({
       })}
     </div>
   );
-}
+};

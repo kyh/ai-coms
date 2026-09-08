@@ -17,11 +17,8 @@ import {
   slugifyChannelName,
   userSchema,
   userStatusSchema,
-  type Conversation,
-  type Message,
-  type User,
-  type UserStatus,
 } from "@/lib/workspace";
+import type { Conversation, Message, User, UserStatus } from "@/lib/workspace";
 
 /**
  * `createChannel` can fail for exactly two reasons, and the caller has to
@@ -31,7 +28,7 @@ export type CreateChannelResult =
   | { ok: true; conversationId: string }
   | { ok: false; reason: "invalid-name" | "duplicate" };
 
-type WorkspaceState = {
+interface WorkspaceState {
   users: User[];
   conversations: Conversation[];
   /** Flat message log; thread replies carry `parentId` and live here too. */
@@ -62,7 +59,7 @@ type WorkspaceState = {
 
   seed: () => void;
   resetWorkspace: () => void;
-};
+}
 
 /**
  * localStorage boundary: every persisted record is zod-parsed on read and any
@@ -70,28 +67,28 @@ type WorkspaceState = {
  * downstream consumers.
  */
 const persistedStateSchema = z.object({
-  users: z.array(z.unknown()).transform((users) =>
-    users.flatMap((user) => {
-      const parsed = userSchema.safeParse(user);
-      return parsed.success ? [parsed.data] : [];
-    }),
-  ),
   conversations: z.array(z.unknown()).transform((conversations) =>
     conversations.flatMap((conversation) => {
       const parsed = conversationSchema.safeParse(conversation);
       return parsed.success ? [parsed.data] : [];
     }),
   ),
+  drafts: z.record(z.string(), z.string()).optional(),
   messages: z.array(z.unknown()).transform((messages) =>
     messages.flatMap((message) => {
       const parsed = messageSchema.safeParse(message);
       return parsed.success ? [parsed.data] : [];
     }),
   ),
-  drafts: z.record(z.string(), z.string()).optional(),
-  status: userStatusSchema.optional(),
-  selectedConversationId: z.string().nullable().optional(),
   seeded: z.boolean().optional(),
+  selectedConversationId: z.string().nullable().optional(),
+  status: userStatusSchema.optional(),
+  users: z.array(z.unknown()).transform((users) =>
+    users.flatMap((user) => {
+      const parsed = userSchema.safeParse(user);
+      return parsed.success ? [parsed.data] : [];
+    }),
+  ),
 });
 
 const markConversationsRead = (
@@ -108,99 +105,178 @@ const markConversationsRead = (
 const DEFAULT_CONVERSATION_ID = "c-general";
 
 const seedState = () => ({
-  users: seedUsers,
   conversations: createSeedConversations(),
   messages: createSeedMessages(),
   status: createSeedStatus(),
+  users: seedUsers,
 });
 
 export const useWorkspaceStore = create<WorkspaceState>()(
   persist(
     (set, get) => ({
-      users: [],
-      conversations: [],
-      messages: [],
-      drafts: {},
-      status: { emoji: "", text: "" },
-      selectedConversationId: null,
-      openThreadId: null,
-      hydrated: false,
-      seeded: false,
+      clearDraft: (conversationId) =>
+        set((state) => {
+          const { [conversationId]: _cleared, ...drafts } = state.drafts;
+          return { drafts };
+        }),
 
-      setHydrated: () => set({ hydrated: true }),
+      closeThread: () => set({ openThreadId: null }),
+
+      conversations: [],
+
+      createChannel: (name, purpose) => {
+        const slug = slugifyChannelName(name);
+        if (slug.length === 0) {
+          return { ok: false, reason: "invalid-name" };
+        }
+        const { conversations } = get();
+        const duplicate = conversations.some(
+          (conversation) => conversation.kind === "channel" && conversation.name === slug,
+        );
+        if (duplicate) {
+          return { ok: false, reason: "duplicate" };
+        }
+        const conversationId = `c-${slug}`;
+        const channel: Conversation = {
+          id: conversationId,
+          kind: "channel",
+          lastReadAt: new Date().toISOString(),
+          memberIds: [ME],
+          muted: false,
+          name: slug,
+          purpose: purpose.trim(),
+        };
+        set((state) => ({
+          conversations: [...state.conversations, channel],
+          openThreadId: null,
+          selectedConversationId: conversationId,
+        }));
+        return { conversationId, ok: true };
+      },
+
+      drafts: {},
+
+      hydrated: false,
+
+      markRead: (conversationIds) =>
+        set((state) => ({
+          conversations: markConversationsRead(state.conversations, conversationIds),
+        })),
+
+      messages: [],
+
+      openThread: (messageId) => set({ openThreadId: messageId }),
+
+      openThreadId: null,
+
+      resetWorkspace: () =>
+        set({
+          ...seedState(),
+          drafts: {},
+          openThreadId: null,
+          seeded: true,
+          selectedConversationId: DEFAULT_CONVERSATION_ID,
+        }),
+
+      // Land on #general: it is fully read, so the unread badges on
+      // #engineering, #incidents, and the DM from Marcus greet the visitor.
+      seed: () =>
+        set((state) => ({
+          ...seedState(),
+          seeded: true,
+          selectedConversationId: state.selectedConversationId ?? DEFAULT_CONVERSATION_ID,
+        })),
+
+      seeded: false,
 
       selectConversation: (conversationId) =>
         set((state) => ({
-          selectedConversationId: conversationId,
-          openThreadId: null,
           conversations: markConversationsRead(state.conversations, [conversationId]),
+          openThreadId: null,
+          selectedConversationId: conversationId,
         })),
 
-      openThread: (messageId) => set({ openThreadId: messageId }),
-      closeThread: () => set({ openThreadId: null }),
+      selectedConversationId: null,
 
       sendMessage: (conversationId, body) => {
         const trimmed = body.trim();
-        if (trimmed.length === 0) return;
+        if (trimmed.length === 0) {
+          return;
+        }
         set((state) => {
           if (!state.conversations.some((conversation) => conversation.id === conversationId)) {
             return state;
           }
           const { [conversationId]: _sent, ...drafts } = state.drafts;
           return {
+            // Your own message can't be unread; keep the badge honest.
+            conversations: markConversationsRead(state.conversations, [conversationId]),
+            drafts,
             messages: [
               ...state.messages,
               {
-                id: crypto.randomUUID(),
-                conversationId,
-                authorId: ME,
                 at: new Date().toISOString(),
+                authorId: ME,
                 body: trimmed,
+                conversationId,
+                id: crypto.randomUUID(),
                 reactions: [],
               },
             ],
-            drafts,
-            // Your own message can't be unread; keep the badge honest.
-            conversations: markConversationsRead(state.conversations, [conversationId]),
           };
         });
       },
 
       sendThreadReply: (parentId, body) => {
         const trimmed = body.trim();
-        if (trimmed.length === 0) return;
+        if (trimmed.length === 0) {
+          return;
+        }
         const parent = get().messages.find((message) => message.id === parentId);
-        if (parent === undefined) return;
+        if (parent === undefined) {
+          return;
+        }
         set((state) => ({
+          conversations: markConversationsRead(state.conversations, [parent.conversationId]),
           messages: [
             ...state.messages,
             {
-              id: crypto.randomUUID(),
-              conversationId: parent.conversationId,
-              authorId: ME,
               at: new Date().toISOString(),
+              authorId: ME,
               body: trimmed,
-              reactions: [],
+              conversationId: parent.conversationId,
+              id: crypto.randomUUID(),
               parentId,
+              reactions: [],
             },
           ],
-          conversations: markConversationsRead(state.conversations, [parent.conversationId]),
         }));
       },
-
       /** Toggles the current user in/out of a message's reaction. Empty reactions vanish. */
+
+      setDraft: (conversationId, draft) =>
+        set((state) => ({ drafts: { ...state.drafts, [conversationId]: draft } })),
+
+      setHydrated: () => set({ hydrated: true }),
+
+      setStatus: (status) => set({ status }),
+
+      status: { emoji: "", text: "" },
+
       toggleReaction: (messageId, emoji) =>
         set((state) => ({
           messages: state.messages.map((message) => {
-            if (message.id !== messageId) return message;
+            if (message.id !== messageId) {
+              return message;
+            }
             const existing = message.reactions.find((reaction) => reaction.emoji === emoji);
             if (existing === undefined) {
-              return { ...message, reactions: [...message.reactions, { emoji, by: [ME] }] };
+              return { ...message, reactions: [...message.reactions, { by: [ME], emoji }] };
             }
             const by = existing.by.includes(ME)
               ? existing.by.filter((userId) => userId !== ME)
               : [...existing.by, ME];
-            const replacement = by.length > 0 ? [{ emoji, by }] : [];
+            const replacement = by.length > 0 ? [{ by, emoji }] : [];
             return {
               ...message,
               reactions: message.reactions.flatMap((reaction) =>
@@ -210,100 +286,47 @@ export const useWorkspaceStore = create<WorkspaceState>()(
           }),
         })),
 
-      markRead: (conversationIds) =>
-        set((state) => ({
-          conversations: markConversationsRead(state.conversations, conversationIds),
-        })),
-
-      createChannel: (name, purpose) => {
-        const slug = slugifyChannelName(name);
-        if (slug.length === 0) return { ok: false, reason: "invalid-name" };
-        const { conversations } = get();
-        const duplicate = conversations.some(
-          (conversation) => conversation.kind === "channel" && conversation.name === slug,
-        );
-        if (duplicate) return { ok: false, reason: "duplicate" };
-
-        const conversationId = `c-${slug}`;
-        const channel: Conversation = {
-          kind: "channel",
-          id: conversationId,
-          name: slug,
-          purpose: purpose.trim(),
-          memberIds: [ME],
-          lastReadAt: new Date().toISOString(),
-          muted: false,
-        };
-        set((state) => ({
-          conversations: [...state.conversations, channel],
-          selectedConversationId: conversationId,
-          openThreadId: null,
-        }));
-        return { ok: true, conversationId };
-      },
-
-      setDraft: (conversationId, draft) =>
-        set((state) => ({ drafts: { ...state.drafts, [conversationId]: draft } })),
-
-      clearDraft: (conversationId) =>
-        set((state) => {
-          const { [conversationId]: _cleared, ...drafts } = state.drafts;
-          return { drafts };
-        }),
-
-      setStatus: (status) => set({ status }),
-
-      // Land on #general: it is fully read, so the unread badges on
-      // #engineering, #incidents, and the DM from Marcus greet the visitor.
-      seed: () =>
-        set((state) => ({
-          ...seedState(),
-          selectedConversationId: state.selectedConversationId ?? DEFAULT_CONVERSATION_ID,
-          seeded: true,
-        })),
-
-      resetWorkspace: () =>
-        set({
-          ...seedState(),
-          drafts: {},
-          selectedConversationId: DEFAULT_CONVERSATION_ID,
-          openThreadId: null,
-          seeded: true,
-        }),
+      users: [],
     }),
     {
-      name: "ai-coms-workspace",
-      version: 1,
-      storage: createJSONStorage(() => localStorage),
-      skipHydration: true,
-      partialize: (state) => ({
-        users: state.users,
-        conversations: state.conversations,
-        messages: state.messages,
-        drafts: state.drafts,
-        status: state.status,
-        selectedConversationId: state.selectedConversationId,
-        seeded: state.seeded,
-      }),
       merge: (persisted, current) => {
         const parsed = persistedStateSchema.safeParse(persisted);
-        if (!parsed.success) return current;
+        if (!parsed.success) {
+          return current;
+        }
         return {
           ...current,
-          users: parsed.data.users,
           conversations: parsed.data.conversations,
-          messages: parsed.data.messages,
           drafts: parsed.data.drafts ?? {},
-          status: parsed.data.status ?? current.status,
-          selectedConversationId: parsed.data.selectedConversationId ?? null,
+          messages: parsed.data.messages,
           seeded: parsed.data.seeded ?? false,
+          selectedConversationId: parsed.data.selectedConversationId ?? null,
+          status: parsed.data.status ?? current.status,
+          users: parsed.data.users,
         };
       },
+      name: "ai-coms-workspace",
       onRehydrateStorage: () => (state, error) => {
-        if (error || !state) return;
-        if (!state.seeded) state.seed();
+        if (error || !state) {
+          return;
+        }
+        if (!state.seeded) {
+          state.seed();
+        }
         state.setHydrated();
       },
+      partialize: (state) => ({
+        conversations: state.conversations,
+        drafts: state.drafts,
+        messages: state.messages,
+        seeded: state.seeded,
+        selectedConversationId: state.selectedConversationId,
+        status: state.status,
+        users: state.users,
+      }),
+      skipHydration: true,
+      storage: createJSONStorage(() => localStorage),
+      version: 1,
     },
   ),
 );

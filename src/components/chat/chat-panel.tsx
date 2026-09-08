@@ -34,7 +34,8 @@ import {
   setStatusPayloadSchema,
 } from "@/lib/assistant-schemas";
 import { cn } from "cn";
-import { buildWorkspaceContext, type WorkspaceContext } from "@/lib/workspace-context";
+import { buildWorkspaceContext } from "@/lib/workspace-context";
+import type { WorkspaceContext } from "@/lib/workspace-context";
 import { useWorkspaceStore } from "@/lib/workspace-store";
 import { ApiKeyDialog, GATEWAY_API_KEY_STORAGE_KEY } from "./api-key-dialog";
 
@@ -51,12 +52,12 @@ const buildContext = (): WorkspaceContext => {
   const { users, conversations, messages, status, selectedConversationId, openThreadId } =
     useWorkspaceStore.getState();
   return buildWorkspaceContext({
-    users,
     conversations,
     messages,
-    status,
-    selectedConversationId,
     openThreadId,
+    selectedConversationId,
+    status,
+    users,
   });
 };
 
@@ -67,7 +68,9 @@ const buildContext = (): WorkspaceContext => {
  * resolver once at store creation, so React state would go stale.
  */
 const resolveAuthHeaders = (): Readonly<Record<string, string>> => {
-  if (typeof window === "undefined") return {};
+  if (typeof window === "undefined") {
+    return {};
+  }
   const key = window.localStorage.getItem(GATEWAY_API_KEY_STORAGE_KEY);
   return key !== null && key.length > 0 ? { authorization: `Bearer ${key}` } : {};
 };
@@ -85,6 +88,84 @@ const resolveAuthHeaders = (): Readonly<Record<string, string>> => {
 /** `subagent.event` wraps a child session's (unstamped) stream event under `data.event`. */
 type AgentStreamEvent = MessageStreamEvent | SubagentChildEventStreamEvent["data"]["event"];
 
+type ToolResult = Extract<
+  Extract<AgentStreamEvent, { type: "action.result" }>["data"]["result"],
+  { kind: "tool-result" }
+>;
+type WorkspaceStore = ReturnType<typeof useWorkspaceStore.getState>;
+
+const applyDraftMessage = (store: WorkspaceStore, result: ToolResult): void => {
+  const payload = draftMessagePayloadSchema.safeParse(result.output);
+  if (!payload.success) {
+    return;
+  }
+  const { conversationId, body } = payload.data;
+  if (!store.conversations.some((conversation) => conversation.id === conversationId)) {
+    toast.error("The assistant tried to draft into a conversation that no longer exists");
+    return;
+  }
+  store.setDraft(conversationId, body);
+  store.selectConversation(conversationId);
+  toast.success("Draft ready in the composer");
+};
+
+const applyCreateChannel = (store: WorkspaceStore, result: ToolResult): void => {
+  const payload = createChannelPayloadSchema.safeParse(result.output);
+  if (!payload.success) {
+    return;
+  }
+  // The tool is stateless, so collision and slug validation live here.
+  const { name, purpose } = payload.data;
+  const created = store.createChannel(name, purpose);
+  if (!created.ok) {
+    toast.error(
+      created.reason === "duplicate"
+        ? `#${name} already exists`
+        : `"${name}" is not a usable channel name`,
+    );
+    return;
+  }
+  toast.success(`Created #${name}`);
+};
+
+const applyAddReaction = (store: WorkspaceStore, result: ToolResult): void => {
+  const payload = addReactionPayloadSchema.safeParse(result.output);
+  if (!payload.success) {
+    return;
+  }
+  const { messageId, emoji } = payload.data;
+  if (!store.messages.some((message) => message.id === messageId)) {
+    toast.error("The assistant tried to react to a message that no longer exists");
+    return;
+  }
+  store.toggleReaction(messageId, emoji);
+  toast.success(`Reacted with ${emoji}`);
+};
+
+const applyMarkRead = (store: WorkspaceStore, result: ToolResult): void => {
+  const payload = markReadPayloadSchema.safeParse(result.output);
+  if (!payload.success) {
+    return;
+  }
+  const known = payload.data.conversationIds.filter((id) =>
+    store.conversations.some((conversation) => conversation.id === id),
+  );
+  if (known.length === 0) {
+    return;
+  }
+  store.markRead(known);
+  toast.success(`Marked ${pluralize(known.length, "conversation")} as read`);
+};
+
+const applySetStatus = (store: WorkspaceStore, result: ToolResult): void => {
+  const payload = setStatusPayloadSchema.safeParse(result.output);
+  if (!payload.success) {
+    return;
+  }
+  store.setStatus(payload.data);
+  toast.success(`Status set to ${payload.data.emoji} ${payload.data.text}`);
+};
+
 const applyToolResult = (event: AgentStreamEvent): void => {
   // Delegation is forbidden by the instructions, but if the model strays,
   // unwrap the child's events so its tool results still reach the store.
@@ -92,70 +173,37 @@ const applyToolResult = (event: AgentStreamEvent): void => {
     applyToolResult(event.data.event);
     return;
   }
-  if (event.type !== "action.result") return;
+  if (event.type !== "action.result") {
+    return;
+  }
   const { status, result } = event.data;
-  if (status !== "completed" || result.kind !== "tool-result" || result.isError === true) return;
+  if (status !== "completed" || result.kind !== "tool-result" || result.isError === true) {
+    return;
+  }
 
   const store = useWorkspaceStore.getState();
   switch (result.toolName) {
     case "draft_message": {
-      const payload = draftMessagePayloadSchema.safeParse(result.output);
-      if (!payload.success) return;
-      const { conversationId, body } = payload.data;
-      if (!store.conversations.some((conversation) => conversation.id === conversationId)) {
-        toast.error("The assistant tried to draft into a conversation that no longer exists");
-        return;
-      }
-      store.setDraft(conversationId, body);
-      store.selectConversation(conversationId);
-      toast.success("Draft ready in the composer");
+      applyDraftMessage(store, result);
       break;
     }
     case "create_channel": {
-      const payload = createChannelPayloadSchema.safeParse(result.output);
-      if (!payload.success) return;
-      // The tool is stateless, so collision and slug validation live here.
-      const { name, purpose } = payload.data;
-      const created = store.createChannel(name, purpose);
-      if (!created.ok) {
-        toast.error(
-          created.reason === "duplicate"
-            ? `#${name} already exists`
-            : `"${name}" is not a usable channel name`,
-        );
-        return;
-      }
-      toast.success(`Created #${name}`);
+      applyCreateChannel(store, result);
       break;
     }
     case "add_reaction": {
-      const payload = addReactionPayloadSchema.safeParse(result.output);
-      if (!payload.success) return;
-      const { messageId, emoji } = payload.data;
-      if (!store.messages.some((message) => message.id === messageId)) {
-        toast.error("The assistant tried to react to a message that no longer exists");
-        return;
-      }
-      store.toggleReaction(messageId, emoji);
-      toast.success(`Reacted with ${emoji}`);
+      applyAddReaction(store, result);
       break;
     }
     case "mark_read": {
-      const payload = markReadPayloadSchema.safeParse(result.output);
-      if (!payload.success) return;
-      const known = payload.data.conversationIds.filter((id) =>
-        store.conversations.some((conversation) => conversation.id === id),
-      );
-      if (known.length === 0) return;
-      store.markRead(known);
-      toast.success(`Marked ${pluralize(known.length, "conversation")} as read`);
+      applyMarkRead(store, result);
       break;
     }
     case "set_status": {
-      const payload = setStatusPayloadSchema.safeParse(result.output);
-      if (!payload.success) return;
-      store.setStatus(payload.data);
-      toast.success(`Status set to ${payload.data.emoji} ${payload.data.text}`);
+      applySetStatus(store, result);
+      break;
+    }
+    default: {
       break;
     }
   }
@@ -167,7 +215,118 @@ const applyToolResult = (event: AgentStreamEvent): void => {
  * All of them route back to the key dialog.
  */
 const isAuthError = (error: Error): boolean =>
-  /unauthorized|forbidden|authentication|api.?key|credential|401|403/i.test(error.message);
+  /unauthorized|forbidden|authentication|api.?key|credential|401|403/iu.test(error.message);
+
+// -----------------------------------------------------------------------------
+// Message rendering — eve's default reducer projects `data.messages` in the
+// AI SDK UIMessage convention: text parts plus `dynamic-tool` parts.
+// -----------------------------------------------------------------------------
+
+type DynamicToolPart = Extract<EveMessagePart, { type: "dynamic-tool" }>;
+
+/** Loose view of tool inputs, for the chip label only. */
+const toolInputPreviewSchema = z.object({
+  conversationIds: z.array(z.string()).optional(),
+  emoji: z.string().optional(),
+  name: z.string().optional(),
+  text: z.string().optional(),
+});
+
+type ToolInputPreview = z.infer<typeof toolInputPreviewSchema>;
+
+interface ToolPartDisplay {
+  icon: React.ComponentType<{ className?: string }>;
+  active: string;
+  done: (input: ToolInputPreview) => string;
+}
+
+const TOOL_DISPLAYS = {
+  add_reaction: {
+    active: "Adding a reaction…",
+    done: (input) => `Reacted with ${input.emoji ?? "an emoji"}`,
+    icon: SmilePlusIcon,
+  },
+  create_channel: {
+    active: "Creating a channel…",
+    done: (input) => `Created #${input.name ?? "channel"}`,
+    icon: HashIcon,
+  },
+  draft_message: {
+    active: "Drafting a message…",
+    done: () => "Draft placed in composer",
+    icon: PenLineIcon,
+  },
+  mark_read: {
+    active: "Clearing unreads…",
+    done: (input) => `Marked ${pluralize(input.conversationIds?.length ?? 0, "conversation")} read`,
+    icon: CheckCheckIcon,
+  },
+  set_status: {
+    active: "Updating your status…",
+    done: (input) => `Status: ${input.emoji ?? ""} ${input.text ?? ""}`.trim(),
+    icon: UserRoundIcon,
+  },
+} satisfies Record<string, ToolPartDisplay>;
+
+const isDisplayedTool = (toolName: string): toolName is keyof typeof TOOL_DISPLAYS =>
+  toolName in TOOL_DISPLAYS;
+
+const toolDisplay = (toolName: string): ToolPartDisplay | undefined =>
+  isDisplayedTool(toolName) ? TOOL_DISPLAYS[toolName] : undefined;
+
+const ToolChip = ({ part }: { part: DynamicToolPart }) => {
+  const display = toolDisplay(part.toolName);
+  if (!display) {
+    return null;
+  }
+
+  let label = display.active;
+  let Icon = display.icon;
+  if (part.state === "output-available") {
+    const input = toolInputPreviewSchema.safeParse(part.input);
+    label = display.done(input.success ? input.data : {});
+    Icon = CheckIcon;
+  } else if (part.state === "output-error" || part.state === "output-denied") {
+    label = "Tool call failed";
+    Icon = XIcon;
+  }
+
+  return (
+    <div className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs text-muted-foreground">
+      <Icon className="size-3" />
+      {label}
+    </div>
+  );
+};
+
+const ChatMessage = ({ message }: { message: EveMessage }) => (
+  <div
+    className={cn("flex flex-col gap-1.5", message.role === "user" ? "items-end" : "items-start")}
+  >
+    {message.parts.map((part, index) => {
+      const key = `${message.id}-${index}`;
+      if (part.type === "text") {
+        return part.text.trim() ? (
+          <div
+            key={key}
+            className={cn(
+              "max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap",
+              message.role === "user"
+                ? "bg-primary text-primary-foreground"
+                : "bg-muted text-foreground",
+            )}
+          >
+            {part.text}
+          </div>
+        ) : null;
+      }
+      if (part.type === "dynamic-tool") {
+        return <ToolChip key={key} part={part} />;
+      }
+      return null;
+    })}
+  </div>
+);
 
 export interface ChatPanelHandle {
   /** Sends a canned prompt from the shell (the conversation "Summarize" button). */
@@ -179,7 +338,7 @@ interface ChatPanelProps {
   onClose: () => void;
 }
 
-export function ChatPanel({ ref, onClose }: ChatPanelProps) {
+export const ChatPanel = ({ ref, onClose }: ChatPanelProps) => {
   const [input, setInput] = React.useState("");
   const [showApiKeyDialog, setShowApiKeyDialog] = React.useState(false);
   const [apiKey, , removeApiKey] = useLocalStorage(GATEWAY_API_KEY_STORAGE_KEY, "");
@@ -187,7 +346,6 @@ export function ChatPanel({ ref, onClose }: ChatPanelProps) {
 
   const agent = useEveAgent({
     headers: resolveAuthHeaders,
-    onEvent: applyToolResult,
     onError: (error) => {
       if (isAuthError(error)) {
         removeApiKey();
@@ -197,6 +355,7 @@ export function ChatPanel({ ref, onClose }: ChatPanelProps) {
         toast.error(error.message || "Something went wrong");
       }
     },
+    onEvent: applyToolResult,
   });
   const { data, status, error, send } = agent;
 
@@ -205,22 +364,30 @@ export function ChatPanel({ ref, onClose }: ChatPanelProps) {
 
   /** Idle with an empty transcript is the example-prompt state — nothing to pin to. */
   React.useEffect(() => {
-    if (data.messages.length === 0 && status === "ready") return;
+    if (data.messages.length === 0 && status === "ready") {
+      return;
+    }
     bottomRef.current?.scrollIntoView({ block: "end" });
   }, [data.messages, status]);
 
   const needsKey = !apiKey && process.env.NODE_ENV !== "development";
 
   const sendPrompt = React.useCallback(
-    (text: string) => {
+    async (text: string) => {
       const trimmed = text.trim();
-      if (!trimmed || isLoading) return;
+      if (!trimmed || isLoading) {
+        return;
+      }
       if (needsKey) {
         setShowApiKeyDialog(true);
         return;
       }
-      send(trimmed, { clientContext: buildContext() }).catch(() => undefined); // failures surface via status/error/onError
       setInput("");
+      try {
+        await send(trimmed, { clientContext: buildContext() });
+      } catch {
+        // Failures surface via status/error/onError.
+      }
     },
     [send, isLoading, needsKey],
   );
@@ -333,7 +500,9 @@ export function ChatPanel({ ref, onClose }: ChatPanelProps) {
             onChange={(event) => setInput(event.target.value)}
             onKeyDown={handleKeyDown}
             onFocus={() => {
-              if (needsKey) setShowApiKeyDialog(true);
+              if (needsKey) {
+                setShowApiKeyDialog(true);
+              }
             }}
             placeholder="Ask about your workspace…"
             rows={2}
@@ -356,120 +525,4 @@ export function ChatPanel({ ref, onClose }: ChatPanelProps) {
       <ApiKeyDialog open={showApiKeyDialog} onOpenChange={setShowApiKeyDialog} />
     </aside>
   );
-}
-
-// -----------------------------------------------------------------------------
-// Message rendering — eve's default reducer projects `data.messages` in the
-// AI SDK UIMessage convention: text parts plus `dynamic-tool` parts.
-// -----------------------------------------------------------------------------
-
-function ChatMessage({ message }: { message: EveMessage }) {
-  return (
-    <div
-      className={cn("flex flex-col gap-1.5", message.role === "user" ? "items-end" : "items-start")}
-    >
-      {message.parts.map((part, index) => {
-        const key = `${message.id}-${index}`;
-        if (part.type === "text") {
-          return part.text.trim() ? (
-            <div
-              key={key}
-              className={cn(
-                "max-w-[85%] rounded-lg px-3 py-2 text-sm whitespace-pre-wrap",
-                message.role === "user"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted text-foreground",
-              )}
-            >
-              {part.text}
-            </div>
-          ) : null;
-        }
-        if (part.type === "dynamic-tool") {
-          return <ToolChip key={key} part={part} />;
-        }
-        return null;
-      })}
-    </div>
-  );
-}
-
-type DynamicToolPart = Extract<EveMessagePart, { type: "dynamic-tool" }>;
-
-/** Loose view of tool inputs, for the chip label only. */
-const toolInputPreviewSchema = z.object({
-  name: z.string().optional(),
-  emoji: z.string().optional(),
-  text: z.string().optional(),
-  conversationIds: z.array(z.string()).optional(),
-});
-
-type ToolInputPreview = z.infer<typeof toolInputPreviewSchema>;
-
-type ToolPartDisplay = {
-  icon: React.ComponentType<{ className?: string }>;
-  active: string;
-  done: (input: ToolInputPreview) => string;
 };
-
-const TOOL_DISPLAYS = {
-  draft_message: {
-    icon: PenLineIcon,
-    active: "Drafting a message…",
-    done: () => "Draft placed in composer",
-  },
-  create_channel: {
-    icon: HashIcon,
-    active: "Creating a channel…",
-    done: (input) => `Created #${input.name ?? "channel"}`,
-  },
-  add_reaction: {
-    icon: SmilePlusIcon,
-    active: "Adding a reaction…",
-    done: (input) => `Reacted with ${input.emoji ?? "an emoji"}`,
-  },
-  mark_read: {
-    icon: CheckCheckIcon,
-    active: "Clearing unreads…",
-    done: (input) => `Marked ${pluralize(input.conversationIds?.length ?? 0, "conversation")} read`,
-  },
-  set_status: {
-    icon: UserRoundIcon,
-    active: "Updating your status…",
-    done: (input) => `Status: ${input.emoji ?? ""} ${input.text ?? ""}`.trim(),
-  },
-} satisfies Record<string, ToolPartDisplay>;
-
-const isDisplayedTool = (toolName: string): toolName is keyof typeof TOOL_DISPLAYS =>
-  toolName in TOOL_DISPLAYS;
-
-const toolDisplay = (toolName: string): ToolPartDisplay | undefined =>
-  isDisplayedTool(toolName) ? TOOL_DISPLAYS[toolName] : undefined;
-
-function ToolChip({ part }: { part: DynamicToolPart }) {
-  const display = toolDisplay(part.toolName);
-  if (!display) return null;
-
-  const done = part.state === "output-available";
-  const failed = part.state === "output-error" || part.state === "output-denied";
-  const input = toolInputPreviewSchema.safeParse(part.input);
-  const label = done
-    ? display.done(input.success ? input.data : {})
-    : failed
-      ? "Tool call failed"
-      : display.active;
-  const Icon = display.icon;
-
-  return (
-    <div className="flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-xs text-muted-foreground">
-      {done ? (
-        <CheckIcon className="size-3" />
-      ) : failed ? (
-        <XIcon className="size-3" />
-      ) : (
-        <Icon className="size-3" />
-      )}
-      {label}
-    </div>
-  );
-}
