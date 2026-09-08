@@ -12,8 +12,8 @@ import { z } from "zod";
 // -----------------------------------------------------------------------------
 
 export const draftMessageInputSchema = z.object({
-  conversationId: z.string().describe("Exact conversation id from the workspace context"),
   body: z.string().describe("The message body only — no channel prefix, no author name"),
+  conversationId: z.string().describe("Exact conversation id from the workspace context"),
 });
 
 export const createChannelInputSchema = z.object({
@@ -22,8 +22,8 @@ export const createChannelInputSchema = z.object({
 });
 
 export const addReactionInputSchema = z.object({
-  messageId: z.string().describe("Exact message id from the workspace context"),
   emoji: z.string().describe("A single emoji character, e.g. ✅ or 🎉"),
+  messageId: z.string().describe("Exact message id from the workspace context"),
 });
 
 export const markReadInputSchema = z.object({

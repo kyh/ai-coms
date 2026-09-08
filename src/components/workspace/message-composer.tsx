@@ -17,24 +17,28 @@ interface MessageComposerProps {
 }
 
 /** Enter sends, Shift+Enter inserts a newline — the chat convention. */
-export function MessageComposer({
+export const MessageComposer = ({
   value,
   onChange,
   onSend,
   placeholder,
   rows = 2,
   hint,
-}: MessageComposerProps) {
+}: MessageComposerProps) => {
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (value.trim().length === 0) return;
+    if (value.trim().length === 0) {
+      return;
+    }
     onSend();
   };
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (event.key === "Enter" && !event.shiftKey) {
       event.preventDefault();
-      if (value.trim().length === 0) return;
+      if (value.trim().length === 0) {
+        return;
+      }
       onSend();
     }
   };
@@ -64,4 +68,4 @@ export function MessageComposer({
       </div>
     </form>
   );
-}
+};

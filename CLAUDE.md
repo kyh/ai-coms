@@ -17,7 +17,7 @@ agent/agent.ts                  # defineAgent: model + step.started BYO-key reso
 agent/instructions.md           # system prompt (persona, per-turn context contract, etiquette)
 agent/channels/eve.ts           # eve's TRANSPORT channel — auth walk: gatewayKeyBearer → vercelOidc → localDev
                                 #   NOT a chat channel. Domain channels live in src/lib/workspace.ts.
-agent/tools/draft_message.ts    # defineTool; snake_case filename = tool name
+agent/tools/draft_message.ts    # defineTool; snake_case filename = tool name (oxlint.config.ts scopes filename-case to snakeCase here)
 agent/tools/{create_channel,add_reaction,mark_read,set_status}.ts
 agent/tools/<builtin>.ts        # disableTool() sentinels (bash, web_fetch, …)
 src/lib/workspace.ts            # zod domain: users, messages, conversation = channel | dm (discriminated union)
@@ -47,7 +47,7 @@ Flow: chat panel `send({ message, clientContext: workspaceDigest })` → eve cha
 pnpm dev          # dev server — boots Next.js AND the eve agent runtime
 pnpm verify       # typecheck · lint · format (the only gate; this repo has no CI)
 pnpm typecheck    # tsc --noEmit (covers agent/ too)
-pnpm lint         # oxlint (warnings are errors)
+pnpm lint         # oxlint — ultracite presets, every rule an error
 pnpm format       # oxfmt --check
 pnpm format:fix   # oxfmt --write
 pnpm build        # production build (Next). Vercel builds the eve service via withEve

@@ -8,7 +8,7 @@ import * as React from "react";
  * layout — Tailwind breakpoints own layout, and disagreeing with them would
  * flash. Used to mark panels covered by a full-screen overlay as inert.
  */
-export function useMediaQuery(query: string): boolean {
+export const useMediaQuery = (query: string): boolean => {
   const subscribe = React.useCallback(
     (onChange: () => void) => {
       const list = window.matchMedia(query);
@@ -23,4 +23,4 @@ export function useMediaQuery(query: string): boolean {
     () => window.matchMedia(query).matches,
     () => false,
   );
-}
+};

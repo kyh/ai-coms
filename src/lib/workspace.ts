@@ -28,9 +28,9 @@ export const presenceSchema = z.enum(["online", "away", "offline"]);
 export type Presence = z.infer<typeof presenceSchema>;
 
 export const userSchema = z.object({
+  avatarColor: avatarColorSchema,
   id: z.string(),
   name: z.string(),
-  avatarColor: avatarColorSchema,
   presence: presenceSchema,
   title: z.string().optional(),
 });
@@ -46,45 +46,45 @@ export const userStatusSchema = z.object({
 export type UserStatus = z.infer<typeof userStatusSchema>;
 
 export const reactionSchema = z.object({
-  emoji: z.string(),
   /** User ids who reacted. Never empty — an emptied reaction is removed. */
   by: z.array(z.string()),
+  emoji: z.string(),
 });
 
 export type Reaction = z.infer<typeof reactionSchema>;
 
 export const messageSchema = z.object({
-  id: z.string(),
-  conversationId: z.string(),
-  authorId: z.string(),
   at: z.iso.datetime(),
+  authorId: z.string(),
   body: z.string(),
-  reactions: z.array(reactionSchema),
+  conversationId: z.string(),
+  id: z.string(),
   /** Present => this message is a reply inside the parent's thread. */
   parentId: z.string().optional(),
+  reactions: z.array(reactionSchema),
 });
 
 export type Message = z.infer<typeof messageSchema>;
 
 export const channelSchema = z.object({
-  kind: z.literal("channel"),
   id: z.string(),
+  kind: z.literal("channel"),
+  lastReadAt: z.iso.datetime(),
+  memberIds: z.array(z.string()),
+  muted: z.boolean(),
   /** Slug, without the leading `#`. */
   name: z.string(),
   purpose: z.string(),
-  memberIds: z.array(z.string()),
-  lastReadAt: z.iso.datetime(),
-  muted: z.boolean(),
 });
 
 export type Channel = z.infer<typeof channelSchema>;
 
 export const dmSchema = z.object({
-  kind: z.literal("dm"),
   id: z.string(),
+  kind: z.literal("dm"),
+  lastReadAt: z.iso.datetime(),
   /** The other participant. The current user is always implicit. */
   userId: z.string(),
-  lastReadAt: z.iso.datetime(),
 });
 
 export type DirectMessage = z.infer<typeof dmSchema>;
@@ -110,7 +110,9 @@ export const REACTION_EMOJI = ["✅", "🎉", "👀", "🔥", "👍", "🙏", "�
 
 /** Display title: the channel's name (no `#`) or the DM partner's name. */
 export const conversationTitle = (conversation: Conversation, users: User[]): string => {
-  if (conversation.kind === "channel") return conversation.name;
+  if (conversation.kind === "channel") {
+    return conversation.name;
+  }
   return users.find((user) => user.id === conversation.userId)?.name ?? "Unknown";
 };
 
@@ -152,14 +154,14 @@ export const lastActivityAt = (messages: Message[], conversationId: string): str
 /** Consecutive messages by one author, within this many ms, render as one block. */
 const GROUP_WINDOW_MS = 5 * 60 * 1000;
 
-export type MessageGroup = {
+export interface MessageGroup {
   /** The first message's id — stable across re-renders. */
   id: string;
   authorId: string;
   /** Timestamp of the first message in the group. */
   at: string;
   messages: Message[];
-};
+}
 
 /**
  * The Slack look: consecutive messages from the same author, each within five
@@ -181,9 +183,9 @@ export const messageGroups = (messages: Message[]): MessageGroup[] => {
       current.messages.push(message);
     } else {
       groups.push({
-        id: message.id,
-        authorId: message.authorId,
         at: message.at,
+        authorId: message.authorId,
+        id: message.id,
         messages: [message],
       });
     }

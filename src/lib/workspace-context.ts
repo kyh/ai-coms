@@ -9,11 +9,8 @@ import {
   reactionSchema,
   threadReplies,
   unreadCount,
-  type Conversation,
-  type Message,
-  type User,
-  type UserStatus,
 } from "@/lib/workspace";
+import type { Conversation, Message, User, UserStatus } from "@/lib/workspace";
 
 /**
  * The dynamic state the client ships with every chat request. The server is
@@ -26,13 +23,13 @@ import {
 const ACTIVE_MESSAGE_LIMIT = 40;
 
 const contextMessageSchema = z.object({
-  id: z.string(),
-  author: z.string(),
   at: z.iso.datetime(),
+  author: z.string(),
   body: z.string(),
-  reactions: z.array(reactionSchema),
+  id: z.string(),
   /** Present on thread replies: the id of the message they hang off. */
   parentId: z.string().optional(),
+  reactions: z.array(reactionSchema),
   /** Present on root messages that have replies. */
   replyCount: z.number().optional(),
 });
@@ -40,36 +37,39 @@ const contextMessageSchema = z.object({
 const conversationDigestSchema = z.object({
   id: z.string(),
   kind: z.enum(["channel", "dm"]),
+  lastActivityAt: z.iso.datetime(),
+  /** DMs are never muted; the flag is always false for them. */
+  muted: z.boolean(),
   /** `#engineering` or a person's name. */
   title: z.string(),
   unreadCount: z.number(),
-  /** DMs are never muted; the flag is always false for them. */
-  muted: z.boolean(),
-  lastActivityAt: z.iso.datetime(),
 });
 
 const activeConversationSchema = z.object({
   id: z.string(),
   kind: z.enum(["channel", "dm"]),
-  title: z.string(),
-  /** Channels only. */
-  purpose: z.string().optional(),
   memberCount: z.number(),
   /** Newest `ACTIVE_MESSAGE_LIMIT` messages, thread replies included, oldest first. */
   messages: z.array(contextMessageSchema),
+  /** Channels only. */
+  purpose: z.string().optional(),
+  title: z.string(),
 });
 
 const openThreadContextSchema = z.object({
-  parentMessageId: z.string(),
   messages: z.array(contextMessageSchema),
+  parentMessageId: z.string(),
 });
 
 export const workspaceContextSchema = z.object({
+  activeConversation: activeConversationSchema.optional(),
+  conversations: z.array(conversationDigestSchema),
+  me: z.object({ id: z.string(), name: z.string(), status: z.string() }),
   /** Current datetime, ISO 8601 with UTC instant. */
   now: z.string(),
+  openThread: openThreadContextSchema.optional(),
   /** IANA timezone, e.g. "America/Los_Angeles". */
   timeZone: z.string(),
-  me: z.object({ id: z.string(), name: z.string(), status: z.string() }),
   users: z.array(
     z.object({
       id: z.string(),
@@ -78,9 +78,6 @@ export const workspaceContextSchema = z.object({
       title: z.string().optional(),
     }),
   ),
-  conversations: z.array(conversationDigestSchema),
-  activeConversation: activeConversationSchema.optional(),
-  openThread: openThreadContextSchema.optional(),
 });
 
 export type WorkspaceContext = z.infer<typeof workspaceContextSchema>;
@@ -108,14 +105,18 @@ const toContextMessage = (
   const author = users.find((user) => user.id === message.authorId)?.name ?? message.authorId;
   const replies = message.parentId === undefined ? threadReplies(allMessages, message.id) : [];
   const contextMessage: ContextMessage = {
-    id: message.id,
-    author,
     at: message.at,
+    author,
     body: message.body,
+    id: message.id,
     reactions: message.reactions,
   };
-  if (message.parentId !== undefined) contextMessage.parentId = message.parentId;
-  if (replies.length > 0) contextMessage.replyCount = replies.length;
+  if (message.parentId !== undefined) {
+    contextMessage.parentId = message.parentId;
+  }
+  if (replies.length > 0) {
+    contextMessage.replyCount = replies.length;
+  }
   return contextMessage;
 };
 
@@ -142,13 +143,21 @@ export const buildWorkspaceContext = ({
   const openThreadParent = messages.find((message) => message.id === openThreadId);
 
   const context: WorkspaceContext = {
-    now: new Date().toISOString(),
-    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    conversations: conversations.map((conversation) => ({
+      id: conversation.id,
+      kind: conversation.kind,
+      lastActivityAt: lastActivityAt(messages, conversation.id),
+      muted: isMuted(conversation),
+      title: displayTitle(conversation, users),
+      unreadCount: unreadCount(conversation, messages),
+    })),
     me: {
       id: ME,
       name: me?.name ?? "You",
       status: status.text.length > 0 ? `${status.emoji} ${status.text}`.trim() : "",
     },
+    now: new Date().toISOString(),
+    timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     users: users
       .filter((user) => user.id !== ME)
       .map((user) => ({
@@ -157,36 +166,30 @@ export const buildWorkspaceContext = ({
         presence: user.presence,
         title: user.title,
       })),
-    conversations: conversations.map((conversation) => ({
-      id: conversation.id,
-      kind: conversation.kind,
-      title: displayTitle(conversation, users),
-      unreadCount: unreadCount(conversation, messages),
-      muted: isMuted(conversation),
-      lastActivityAt: lastActivityAt(messages, conversation.id),
-    })),
   };
 
   if (active !== undefined) {
     const activeConversation: ActiveConversation = {
       id: active.id,
       kind: active.kind,
-      title: displayTitle(active, users),
       memberCount: memberCount(active),
       messages: conversationMessages(messages, active.id)
         .slice(-ACTIVE_MESSAGE_LIMIT)
         .map((message) => toContextMessage(message, users, messages)),
+      title: displayTitle(active, users),
     };
-    if (active.kind === "channel") activeConversation.purpose = active.purpose;
+    if (active.kind === "channel") {
+      activeConversation.purpose = active.purpose;
+    }
     context.activeConversation = activeConversation;
   }
 
   if (openThreadParent !== undefined) {
     context.openThread = {
-      parentMessageId: openThreadParent.id,
       messages: [openThreadParent, ...threadReplies(messages, openThreadParent.id)].map((message) =>
         toContextMessage(message, users, messages),
       ),
+      parentMessageId: openThreadParent.id,
     };
   }
 

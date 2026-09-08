@@ -7,13 +7,24 @@ import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
 import { cn } from "cn";
-import { conversationTitle, ME, unreadCount, type Conversation, type User } from "@/lib/workspace";
+import { conversationTitle, ME, unreadCount } from "@/lib/workspace";
+import type { Conversation, User } from "@/lib/workspace";
 import { useWorkspaceStore } from "@/lib/workspace-store";
 import { CreateChannelDialog } from "./create-channel-dialog";
 import { PresenceDot } from "./presence-dot";
 import { UserAvatar } from "./user-avatar";
 
-function ConversationButton({
+const conversationRowTone = (active: boolean, bold: boolean): string => {
+  if (active) {
+    return "bg-muted font-medium text-foreground";
+  }
+  if (bold) {
+    return "font-semibold text-foreground hover:bg-muted/50";
+  }
+  return "text-muted-foreground hover:bg-muted/50 hover:text-foreground";
+};
+
+const ConversationButton = ({
   conversation,
   users,
   unread,
@@ -25,7 +36,7 @@ function ConversationButton({
   unread: number;
   active: boolean;
   onSelect: () => void;
-}) {
+}) => {
   const partner =
     conversation.kind === "dm" ? users.find((user) => user.id === conversation.userId) : undefined;
   const bold = unread > 0 && !active;
@@ -37,11 +48,7 @@ function ConversationButton({
       aria-current={active ? "page" : undefined}
       className={cn(
         "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors",
-        active
-          ? "bg-muted font-medium text-foreground"
-          : bold
-            ? "font-semibold text-foreground hover:bg-muted/50"
-            : "text-muted-foreground hover:bg-muted/50 hover:text-foreground",
+        conversationRowTone(active, bold),
       )}
     >
       {conversation.kind === "channel" ? (
@@ -60,18 +67,18 @@ function ConversationButton({
       )}
     </button>
   );
-}
+};
 
-function SectionHeading({ children }: { children: React.ReactNode }) {
-  return <div className="px-2 pt-4 pb-1 text-xs font-medium text-muted-foreground">{children}</div>;
-}
+const SectionHeading = ({ children }: { children: React.ReactNode }) => (
+  <div className="px-2 pt-4 pb-1 text-xs font-medium text-muted-foreground">{children}</div>
+);
 
 interface WorkspaceSidebarProps {
   /** Fired after a conversation is picked, so the mobile slide-over can dismiss itself. */
   onNavigate?: () => void;
 }
 
-export function WorkspaceSidebar({ onNavigate }: WorkspaceSidebarProps) {
+export const WorkspaceSidebar = ({ onNavigate }: WorkspaceSidebarProps) => {
   const users = useWorkspaceStore((state) => state.users);
   const conversations = useWorkspaceStore((state) => state.conversations);
   const messages = useWorkspaceStore((state) => state.messages);
@@ -155,4 +162,4 @@ export function WorkspaceSidebar({ onNavigate }: WorkspaceSidebarProps) {
       <CreateChannelDialog open={createOpen} onOpenChange={setCreateOpen} />
     </nav>
   );
-}
+};

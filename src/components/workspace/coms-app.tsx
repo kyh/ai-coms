@@ -3,7 +3,8 @@
 import * as React from "react";
 import { MenuIcon, SparklesIcon } from "lucide-react";
 
-import { ChatPanel, type ChatPanelHandle } from "@/components/chat/chat-panel";
+import { ChatPanel } from "@/components/chat/chat-panel";
+import type { ChatPanelHandle } from "@/components/chat/chat-panel";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Button } from "@/components/ui/button";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
@@ -15,29 +16,27 @@ import { ConversationView } from "./conversation-view";
 import { ThreadPane } from "./thread-pane";
 import { WorkspaceSidebar } from "./workspace-sidebar";
 
-function AppSkeleton() {
-  return (
-    <div className="flex min-h-0 flex-1">
-      <div className="hidden w-60 shrink-0 flex-col gap-2 border-r p-3 md:flex">
-        {Array.from({ length: 9 }, (_, index) => (
-          <Skeleton key={index} className="h-7 w-full" />
-        ))}
-      </div>
-      <div className="flex min-w-0 flex-1 flex-col gap-3 p-4">
-        <Skeleton className="h-8 w-1/3" />
-        <Skeleton className="h-20 w-full" />
-        <Skeleton className="h-20 w-full" />
-        <Skeleton className="h-20 w-full" />
-      </div>
-      <div className="hidden w-[360px] shrink-0 flex-col gap-3 border-l p-3 lg:flex">
-        <Skeleton className="h-8 w-full" />
-        <Skeleton className="h-32 w-full" />
-      </div>
+const AppSkeleton = () => (
+  <div className="flex min-h-0 flex-1">
+    <div className="hidden w-60 shrink-0 flex-col gap-2 border-r p-3 md:flex">
+      {Array.from({ length: 9 }, (_, index) => (
+        <Skeleton key={index} className="h-7 w-full" />
+      ))}
     </div>
-  );
-}
+    <div className="flex min-w-0 flex-1 flex-col gap-3 p-4">
+      <Skeleton className="h-8 w-1/3" />
+      <Skeleton className="h-20 w-full" />
+      <Skeleton className="h-20 w-full" />
+      <Skeleton className="h-20 w-full" />
+    </div>
+    <div className="hidden w-[360px] shrink-0 flex-col gap-3 border-l p-3 lg:flex">
+      <Skeleton className="h-8 w-full" />
+      <Skeleton className="h-32 w-full" />
+    </div>
+  </div>
+);
 
-export function ComsApp() {
+export const ComsApp = () => {
   const hydrated = useWorkspaceStore((state) => state.hydrated);
   const openThreadId = useWorkspaceStore((state) => state.openThreadId);
 
@@ -165,4 +164,4 @@ export function ComsApp() {
       )}
     </div>
   );
-}
+};
