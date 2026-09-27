@@ -17,7 +17,7 @@ describe("structured data", () => {
 
   test("the organization is contactable without a postal address", () => {
     const organization = buildOrganization();
-    assert.equal(organization.email, "im.kaiyu@gmail.com");
+    assert.equal(organization.email, "kai@kyh.io");
     assert.ok(organization.contactPoint.every((point) => point.email === organization.email));
     assert.ok(organization.sameAs.length > 0);
     assert.equal("address" in organization, false);
