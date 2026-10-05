@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import type { MessageStreamEvent, SubagentChildEventStreamEvent } from "eve/client";
+import type { MessageStreamEvent } from "eve/client";
 import type { EveMessage, EveMessagePart } from "eve/react";
 import { useEveAgent } from "eve/react";
 import {
@@ -85,11 +85,8 @@ const resolveAuthHeaders = (): Readonly<Record<string, string>> => {
 // the shared schemas before touching the store.
 // -----------------------------------------------------------------------------
 
-/** `subagent.event` wraps a child session's (unstamped) stream event under `data.event`. */
-type AgentStreamEvent = MessageStreamEvent | SubagentChildEventStreamEvent["data"]["event"];
-
 type ToolResult = Extract<
-  Extract<AgentStreamEvent, { type: "action.result" }>["data"]["result"],
+  Extract<MessageStreamEvent, { type: "action.result" }>["data"]["result"],
   { kind: "tool-result" }
 >;
 type WorkspaceStore = ReturnType<typeof useWorkspaceStore.getState>;
@@ -166,13 +163,7 @@ const applySetStatus = (store: WorkspaceStore, result: ToolResult): void => {
   toast.success(`Status set to ${payload.data.emoji} ${payload.data.text}`);
 };
 
-const applyToolResult = (event: AgentStreamEvent): void => {
-  // Delegation is forbidden by the instructions, but if the model strays,
-  // unwrap the child's events so its tool results still reach the store.
-  if (event.type === "subagent.event") {
-    applyToolResult(event.data.event);
-    return;
-  }
+const applyToolResult = (event: MessageStreamEvent): void => {
   if (event.type !== "action.result") {
     return;
   }
