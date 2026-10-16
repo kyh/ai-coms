@@ -113,6 +113,7 @@ There is no mobile, desktop, or extension target — the browser app is the whol
 - Add UI components only via `pnpm dlx shadcn@latest add <name>` (base-vega / Base UI — `render` prop, not `asChild`); never hand-copy into `src/components/ui`.
 - `shadcn` lives in devDependencies but `src/app/globals.css` does `@import "shadcn/tailwind.css"` — it is a **build-time** dependency. Never prune dev deps in a build step.
 - `typescript` is pinned to `^6` and excluded from update sweeps (`pnpm.updateConfig.ignoreDependencies`). TypeScript 7 / tsgo breaks Next 16 — do not bump it.
+- **`cacheComponents` and `partialPrefetching` are on** (`next.config.ts`). Route segment config (`dynamic`, `revalidate`, …) is a build error under them; anything reading the clock or the request at render time needs `"use cache"` or `<Suspense>` (see `src/app/sitemap.ts`).
 
 ## Map
 
